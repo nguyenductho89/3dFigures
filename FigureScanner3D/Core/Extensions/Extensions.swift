@@ -15,28 +15,46 @@ extension Color {
 
 // MARK: - Date Extensions
 extension Date {
-    var timeAgoString: String {
+    // MARK: Cached Formatters (for performance)
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
-    }
+        return formatter
+    }()
 
-    var shortDateString: String {
+    private static let shortDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .none
-        return formatter.string(from: self)
-    }
+        return formatter
+    }()
 
-    var mediumDateTimeString: String {
+    private static let mediumDateTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        return formatter.string(from: self)
+        return formatter
+    }()
+
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        ISO8601DateFormatter()
+    }()
+
+    // MARK: Formatted String Properties
+    var timeAgoString: String {
+        Self.relativeFormatter.localizedString(for: self, relativeTo: Date())
+    }
+
+    var shortDateString: String {
+        Self.shortDateFormatter.string(from: self)
+    }
+
+    var mediumDateTimeString: String {
+        Self.mediumDateTimeFormatter.string(from: self)
     }
 
     var iso8601String: String {
-        ISO8601DateFormatter().string(from: self)
+        Self.iso8601Formatter.string(from: self)
     }
 }
 
@@ -107,10 +125,14 @@ extension Float {
 
 // MARK: - Int Extensions
 extension Int {
-    var formattedWithSeparator: String {
+    private static let decimalFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: self)) ?? "\(self)"
+        return formatter
+    }()
+
+    var formattedWithSeparator: String {
+        Self.decimalFormatter.string(from: NSNumber(value: self)) ?? "\(self)"
     }
 }
 
