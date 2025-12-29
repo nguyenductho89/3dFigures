@@ -1,0 +1,60 @@
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcworkspace/contents.xcworkspacedata
+/*.gcno
+**/xcshareddata/WorkspaceSettings.xcsettings
+
+# Build
+build/
+DerivedData/
+*.moved-aside
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Dependencies
+Carthage/Build/
+Pods/
+.build/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# CocoaPods
+Podfile.lock
+
+# Code Injection
+iOSInjectionProject/
+
+# OS
+.DS_Store
+*.swp
+*~.nib
+
+# IDE
+.idea/
+*.xcuserstate
+xcuserdata/
+
+# Keys and secrets
+*.pem
+*.p12
+*.mobileprovision
+secrets/
+.env
+.env.*
+
+# Test output
+*.xcresult
+
+# Archive
+*.xcarchive

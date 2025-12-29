@@ -1,0 +1,97 @@
+name: FigureScanner3D
+options:
+  bundleIdPrefix: com.nguyenductho89
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  FigureScanner3D:
+    type: application
+    platform: iOS
+    sources:
+      - path: FigureScanner3D
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nguyenductho89.FigureScanner3D
+        INFOPLIST_FILE: FigureScanner3D/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: FigureScanner3D/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: 3D Scanner
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: "Camera access is required for 3D scanning"
+        NSPhotoLibraryUsageDescription: "Photo library access is needed to save exported 3D models"
+        UIRequiredDeviceCapabilities:
+          - arkit
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    entitlements:
+      path: FigureScanner3D/Resources/FigureScanner3D.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+
+  FigureScanner3DTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FigureScanner3DTests
+    dependencies:
+      - target: FigureScanner3D
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nguyenductho89.FigureScanner3DTests
+
+  FigureScanner3DUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: FigureScanner3DUITests
+    dependencies:
+      - target: FigureScanner3D
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nguyenductho89.FigureScanner3DUITests
+
+schemes:
+  FigureScanner3D:
+    build:
+      targets:
+        FigureScanner3D: all
+        FigureScanner3DTests: [test]
+        FigureScanner3DUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FigureScanner3DTests
+        - FigureScanner3DUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

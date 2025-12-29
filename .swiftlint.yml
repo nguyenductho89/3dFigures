@@ -1,0 +1,42 @@
+excluded:
+  - DerivedData
+  - build
+  - Pods
+  - .build
+
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+  - function_body_length
+  - type_body_length
+  - file_length
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - force_unwrapping
+  - implicit_return
+  - modifier_order
+  - multiline_arguments
+  - multiline_parameters
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+
+force_cast: warning
+force_try: warning
+force_unwrapping: warning
+
+identifier_name:
+  min_length: 2
+  max_length: 50
+  excluded:
+    - id
+    - x
+    - y
+    - z
+
+nesting:
+  type_level: 3
+  function_level: 3
+
+reporter: "xcode"

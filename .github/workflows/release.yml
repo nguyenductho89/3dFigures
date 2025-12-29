@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  SCHEME: FigureScanner3D
+
+jobs:
+  build-release:
+    name: Build Release
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Extract Version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update Version
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.VERSION }}" \
+            FigureScanner3D/Resources/Info.plist
+
+      - name: Build Archive
+        run: |
+          xcodebuild archive \
+            -scheme "$SCHEME" \
+            -archivePath build/FigureScanner3D.xcarchive \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: FigureScanner3D-${{ steps.version.outputs.VERSION }}
+          path: build/FigureScanner3D.xcarchive
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## 3D Figure Scanner v${{ steps.version.outputs.VERSION }}
+
+            ### Changes
+            - See commit history for details
+
+            ### Installation
+            Download the archive and sign with your own certificates.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

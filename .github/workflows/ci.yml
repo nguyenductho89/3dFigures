@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  SCHEME: FigureScanner3D
+  DESTINATION: 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.4'
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+      - name: Run Tests
+        run: |
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -configuration Debug \
+            -resultBundlePath TestResults \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
+
+  lint:
+    name: SwiftLint
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: |
+          if ! command -v swiftlint &> /dev/null; then
+            brew install swiftlint
+          fi
+
+      - name: Run SwiftLint
+        run: swiftlint --reporter github-actions-logging || true
