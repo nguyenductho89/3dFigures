@@ -1,6 +1,6 @@
 # Technical Debt Backlog
 
-> Last Updated: 2025-12-29 (P0 & P1 items completed)
+> Last Updated: 2025-12-29 (P0, P1 & most P2 items completed)
 >
 > This document tracks technical debt items identified during code review.
 > Each item has a unique ID for tracking and prioritization.
@@ -455,7 +455,7 @@ ForEach(MeshExportService.ExportFormat.allCases.filter { $0 != .usdz }, id: \.se
 |-------|-------|
 | **ID** | TD-010 |
 | **Priority** | P2 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | `Scan3DModel.swift:140-171`, `MeshExportService.swift:12-39` |
 | **Category** | Code Duplication |
 
@@ -475,7 +475,7 @@ Keep only `MeshExportService.ExportFormat` and update `Scan3DModel` to use it vi
 |-------|-------|
 | **ID** | TD-011 |
 | **Priority** | P2 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | `ScanStorageService.swift:8-9` |
 | **Category** | Architecture |
 
@@ -512,7 +512,7 @@ final class AppDependencies: ObservableObject {
 |-------|-------|
 | **ID** | TD-012 |
 | **Priority** | P2 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | `ScanStorageService.swift:52-59` |
 | **Category** | Error Handling |
 
@@ -552,7 +552,7 @@ private func setupDirectories() async throws {
 |-------|-------|
 | **ID** | TD-013 |
 | **Priority** | P2 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | `FaceScanView.swift`, `MeshProcessingService.swift` |
 | **Category** | UX |
 
@@ -598,7 +598,7 @@ func process(_ mesh: CapturedMesh, options: ProcessingOptions) async throws -> P
 |-------|-------|
 | **ID** | TD-014 |
 | **Priority** | P2 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | `FigureScanner3DTests/` |
 | **Category** | Testing |
 
@@ -621,7 +621,7 @@ Test files exist but contain no actual tests.
 |-------|-------|
 | **ID** | TD-015 |
 | **Priority** | P2 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | Multiple files |
 | **Category** | Documentation |
 
@@ -660,7 +660,7 @@ func process(_ mesh: CapturedMesh, options: ProcessingOptions) async throws -> P
 |-------|-------|
 | **ID** | TD-016 |
 | **Priority** | P3 |
-| **Status** | OPEN |
+| **Status** | DONE |
 | **File** | `LiDARScanningService.swift:49, 54-55` |
 | **Category** | Code Quality |
 
@@ -761,9 +761,9 @@ struct ShareSheet: UIViewControllerRepresentable {
 |----------|-------|--------|
 | P0 - Critical | 4 | **All DONE** |
 | P1 - High | 5 | **All DONE** |
-| P2 - Medium | 6 | All OPEN |
-| P3 - Low | 3 | 1 DONE, 2 OPEN |
-| **Total** | **18** | **10 DONE** |
+| P2 - Medium | 6 | **All DONE** |
+| P3 - Low | 3 | **2 DONE**, 1 OPEN |
+| **Total** | **18** | **17 DONE** |
 
 ---
 
@@ -775,3 +775,5 @@ struct ShareSheet: UIViewControllerRepresentable {
 | 2025-12-29 | Claude Code | Completed P0 items (TD-001 to TD-004) |
 | 2025-12-29 | Claude Code | Completed P1 items (TD-005 to TD-009) |
 | 2025-12-29 | Claude Code | Fixed TD-018 (ShareSheet added in TD-003) |
+| 2025-12-29 | Claude Code | Completed P2 items (TD-010 to TD-015) |
+| 2025-12-29 | Claude Code | Completed TD-016 (Magic numbers extracted to ScanConfiguration) |
