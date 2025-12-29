@@ -77,6 +77,38 @@ struct GalleryView: View {
             .task {
                 await viewModel.loadScans()
             }
+            .sheet(isPresented: $viewModel.showShareSheet) {
+                if let url = viewModel.exportedFileURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
+            .alert("Error", isPresented: .init(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+            .overlay {
+                if viewModel.isExporting {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                            Text("Exporting...")
+                                .foregroundColor(.white)
+                                .font(.headline)
+                        }
+                        .padding(30)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(16)
+                    }
+                }
+            }
         }
     }
 
@@ -418,8 +450,11 @@ class GalleryViewModel: ObservableObject {
     @Published var sortOption: SortOption = .dateNewest
     @Published var viewMode: ViewMode = .grid
     @Published var isLoading = false
+    @Published var isExporting = false
     @Published var errorMessage: String?
     @Published var storageUsed: String = "Calculating..."
+    @Published var showShareSheet = false
+    @Published var exportedFileURL: URL?
 
     private let storageService = ScanStorageService.shared
     private let exportService = MeshExportService()
@@ -484,23 +519,50 @@ class GalleryViewModel: ObservableObject {
     }
 
     func exportScan(_ scan: Scan3DModel, format: ExportFormat) async {
-        // Export logic would go here
-        // For now, we just record the export
-        var updatedScan = scan
-        let record = ExportRecord(
-            format: format,
-            fileName: "\(scan.name).\(format.fileExtension)",
-            fileSize: scan.fileSize
-        )
-        updatedScan.exports.append(record)
+        // Check if mesh file exists
+        guard let meshFileName = scan.meshFileName else {
+            errorMessage = "No mesh file found for this scan"
+            return
+        }
+
+        isExporting = true
+        defer { isExporting = false }
 
         do {
+            // Load the mesh from storage
+            let mesh = try await storageService.loadMesh(fileName: meshFileName)
+
+            // Export the mesh to the selected format
+            let result = try await exportService.export(
+                mesh: mesh,
+                format: format.meshExportFormat,
+                fileName: scan.name.sanitizedFileName
+            )
+
+            // Create export record with actual file info
+            var updatedScan = scan
+            let record = ExportRecord(
+                format: format,
+                fileName: result.fileURL.lastPathComponent,
+                fileSize: result.fileSize
+            )
+            updatedScan.exports.append(record)
+            updatedScan.updatedAt = Date()
+
+            // Save updated scan metadata
             try await storageService.saveScan(updatedScan)
+
+            // Update local state
             if let index = scans.firstIndex(where: { $0.id == scan.id }) {
                 scans[index] = updatedScan
             }
+
+            // Show share sheet with exported file
+            exportedFileURL = result.fileURL
+            showShareSheet = true
+
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Export failed: \(error.localizedDescription)"
         }
     }
 
@@ -518,6 +580,17 @@ class GalleryViewModel: ObservableObject {
             scans.sort { $0.fileSize > $1.fileSize }
         }
     }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {
