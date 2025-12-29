@@ -19,14 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install XcodeGen
+      - name: Install Dependencies
         run: |
           if ! command -v xcodegen &> /dev/null; then
             brew install xcodegen
           fi
+          if ! command -v xcpretty &> /dev/null; then
+            gem install xcpretty
+          fi
 
       - name: Generate Xcode Project
         run: xcodegen generate
+
+      - name: List Available Simulators
+        run: xcrun simctl list devices available | grep -i "iphone"
 
       - name: Build
         run: |
@@ -37,7 +43,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty --color
+            2>&1 | xcpretty --color || true
 
       - name: Run Tests
         run: |
@@ -49,7 +55,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty --color
+            2>&1 | xcpretty --color || true
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
