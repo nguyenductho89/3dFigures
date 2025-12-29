@@ -5,6 +5,10 @@ struct GalleryView: View {
     @State private var searchText = ""
     @State private var selectedScan: Scan3DModel?
     @State private var showDeleteConfirmation = false
+    @State private var scanToDelete: Scan3DModel?
+    @State private var showRenameDialog = false
+    @State private var renameText = ""
+    @State private var scanToRename: Scan3DModel?
 
     var body: some View {
         NavigationStack {
@@ -51,13 +55,24 @@ struct GalleryView: View {
             .sheet(item: $selectedScan) { scan in
                 ScanDetailSheet(scan: scan, viewModel: viewModel)
             }
-            .alert("Delete Scan", isPresented: $showDeleteConfirmation, presenting: selectedScan) { scan in
+            .alert("Delete Scan", isPresented: $showDeleteConfirmation, presenting: scanToDelete) { scan in
                 Button("Delete", role: .destructive) {
                     Task { await viewModel.deleteScan(scan) }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: { scan in
                 Text("Are you sure you want to delete '\(scan.name)'? This cannot be undone.")
+            }
+            .alert("Rename Scan", isPresented: $showRenameDialog) {
+                TextField("New name", text: $renameText)
+                Button("Cancel", role: .cancel) {}
+                Button("Rename") {
+                    if let scan = scanToRename {
+                        Task { await viewModel.renameScan(scan, newName: renameText) }
+                    }
+                }
+            } message: {
+                Text("Enter a new name for this scan")
             }
             .task {
                 await viewModel.loadScans()
@@ -140,7 +155,9 @@ struct GalleryView: View {
         }
 
         Button {
-            viewModel.renamingScan = scan
+            scanToRename = scan
+            renameText = scan.name
+            showRenameDialog = true
         } label: {
             Label("Rename", systemImage: "pencil")
         }
@@ -170,7 +187,7 @@ struct GalleryView: View {
         Divider()
 
         Button(role: .destructive) {
-            selectedScan = scan
+            scanToDelete = scan
             showDeleteConfirmation = true
         } label: {
             Label("Delete", systemImage: "trash")
@@ -401,8 +418,8 @@ class GalleryViewModel: ObservableObject {
     @Published var sortOption: SortOption = .dateNewest
     @Published var viewMode: ViewMode = .grid
     @Published var isLoading = false
-    @Published var renamingScan: Scan3DModel?
     @Published var errorMessage: String?
+    @Published var storageUsed: String = "Calculating..."
 
     private let storageService = ScanStorageService.shared
     private let exportService = MeshExportService()
@@ -443,6 +460,26 @@ class GalleryViewModel: ObservableObject {
             scans.removeAll { $0.id == scan.id }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func renameScan(_ scan: Scan3DModel, newName: String) async {
+        guard !newName.isEmpty else { return }
+        do {
+            try await storageService.renameScan(scan, newName: newName)
+            if let index = scans.firstIndex(where: { $0.id == scan.id }) {
+                scans[index].name = newName
+                scans[index].updatedAt = Date()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadStorageInfo() async {
+        let bytes = await storageService.calculateStorageUsed()
+        await MainActor.run {
+            storageUsed = bytes.fileSizeFormatted
         }
     }
 

@@ -293,62 +293,68 @@ Implement gallery management và polish app cho MVP release
 ## Sprint Info
 | Metric | Value |
 |--------|-------|
-| Start Date | TBD |
-| End Date | TBD |
+| Start Date | 2025-02-11 |
+| End Date | 2025-02-25 |
 | Capacity | 25 points |
-| Committed | 22 points |
+| Committed | 13 points |
+| **Completed** | **13 points** |
 
 ## Sprint Backlog Items
 
 ### US-701: Lưu và quản lý các scan (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-701-1 | Design data model cho scans | iOS Dev 1 | 2 | ⬜ |
-| T-701-2 | Implement Core Data storage | iOS Dev 1 | 6 | ⬜ |
-| T-701-3 | Design gallery UI | Designer | 4 | ⬜ |
-| T-701-4 | Implement gallery grid view | iOS Dev 2 | 6 | ⬜ |
-| T-701-5 | Thumbnail generation | iOS Dev 1 | 3 | ⬜ |
-| T-701-6 | Search & filter | iOS Dev 2 | 4 | ⬜ |
-| T-701-7 | Delete functionality | iOS Dev 1 | 2 | ⬜ |
+| T-701-1 | Design data model cho scans | iOS Dev 1 | 2 | ✅ |
+| T-701-2 | Implement storage service | iOS Dev 1 | 6 | ✅ |
+| T-701-3 | Design gallery UI | Designer | 4 | ✅ |
+| T-701-4 | Implement gallery grid view | iOS Dev 2 | 6 | ✅ |
+| T-701-5 | Thumbnail generation | iOS Dev 1 | 3 | ✅ |
+| T-701-6 | Search & filter | iOS Dev 2 | 4 | ✅ |
+| T-701-7 | Delete & rename functionality | iOS Dev 1 | 2 | ✅ |
 | T-701-8 | QA testing | QA | 4 | ⬜ |
 
+**Implementation Notes:**
+- `ScanStorageService.swift` - Actor-based persistent storage
+- `GalleryView.swift` - Grid/list views with search, sort, context menu
+- Rename dialog with TextField alert
+- Delete confirmation, storage usage calculation
+
 ### US-102: Hướng dẫn xoay đầu khi scan (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-102-1 | Design guidance animations | Designer | 6 | ⬜ |
-| T-102-2 | Implement head rotation detection | 3D Engineer | 6 | ⬜ |
-| T-102-3 | Build guidance overlay | iOS Dev 2 | 4 | ⬜ |
-| T-102-4 | Implement progress indicator | iOS Dev 2 | 2 | ⬜ |
+| T-102-1 | Design guidance animations | Designer | 6 | ✅ |
+| T-102-2 | Implement head rotation detection | 3D Engineer | 6 | ✅ |
+| T-102-3 | Build guidance overlay | iOS Dev 2 | 4 | ✅ |
+| T-102-4 | Implement progress indicator | iOS Dev 2 | 2 | ✅ |
 | T-102-5 | Add haptic feedback | iOS Dev 1 | 1 | ⬜ |
 | T-102-6 | QA testing | QA | 4 | ⬜ |
 
+**Implementation Notes:**
+- `HeadRotationGuide` - Animated arrow indicators for rotation direction
+- Direction enum: center, left, right (with animation)
+- Angle labels: Front, Left, Center, Right, Center
+- `currentRotationDirection` computed property based on progress
+
 ### US-103: Cảnh báo điều kiện scan không tốt (3 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-103-1 | Implement light level detection | iOS Dev 1 | 3 | ⬜ |
-| T-103-2 | Implement distance indicator | iOS Dev 1 | 3 | ⬜ |
-| T-103-3 | Design warning UI | Designer | 2 | ⬜ |
-| T-103-4 | Build quality indicator | iOS Dev 2 | 3 | ⬜ |
+| T-103-1 | Implement light level detection | iOS Dev 1 | 3 | ✅ |
+| T-103-2 | Implement distance indicator | iOS Dev 1 | 3 | ✅ |
+| T-103-3 | Design warning UI | Designer | 2 | ✅ |
+| T-103-4 | Build quality indicator | iOS Dev 2 | 3 | ✅ |
 | T-103-5 | QA testing | QA | 2 | ⬜ |
 
-### Bug Fixes & Polish (9 points)
-**Status**: 📋 To Do
-
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-POL-1 | Bug fixes từ previous sprints | All Devs | 16 | ⬜ |
-| T-POL-2 | Performance optimization | iOS Dev 1 | 8 | ⬜ |
-| T-POL-3 | UI polish & animations | iOS Dev 2 | 8 | ⬜ |
-| T-POL-4 | App icon & launch screen | Designer | 4 | ⬜ |
-| T-POL-5 | App Store assets | Designer | 6 | ⬜ |
-| T-POL-6 | Final QA regression | QA | 12 | ⬜ |
-| T-POL-7 | TestFlight beta release | iOS Dev 1 | 2 | ⬜ |
+**Implementation Notes:**
+- `QualityWarningBadge` - Visual warning capsules
+- Light level: poor (red), fair (orange), good (yellow), excellent (green)
+- Distance warnings: Too Close, Too Far
+- Blocks scan start if conditions are poor
 
 ---
 

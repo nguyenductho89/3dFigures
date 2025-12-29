@@ -125,6 +125,18 @@ struct FaceScanView: View {
                 )
                 .frame(width: 250, height: 320)
 
+            // Rotation arrow indicator (during scanning)
+            if viewModel.scanState == .scanning {
+                HeadRotationGuide(direction: viewModel.currentRotationDirection)
+                    .offset(y: -20)
+            }
+
+            // Quality warnings (during ready state)
+            if viewModel.scanState == .ready {
+                qualityWarningsOverlay
+                    .offset(y: -200)
+            }
+
             // Guidance text
             VStack(spacing: 8) {
                 if viewModel.scanState == .ready {
@@ -134,6 +146,10 @@ struct FaceScanView: View {
                     } else if !viewModel.isDistanceOptimal {
                         Text(viewModel.distanceGuidance)
                             .font(.headline)
+                    } else if viewModel.lightingQuality == .poor {
+                        Text("Improve lighting conditions")
+                            .font(.headline)
+                            .foregroundColor(.orange)
                     } else {
                         Text("Ready to scan")
                             .font(.headline)
@@ -145,12 +161,17 @@ struct FaceScanView: View {
                     Text(viewModel.guidanceText)
                         .font(.headline)
 
-                    // Capture progress indicator
-                    HStack(spacing: 4) {
-                        ForEach(0..<5) { index in
-                            Circle()
-                                .fill(index < viewModel.capturedAnglesCount ? Color.green : Color.white.opacity(0.3))
-                                .frame(width: 12, height: 12)
+                    // Capture progress indicator with angle labels
+                    HStack(spacing: 8) {
+                        ForEach(Array(viewModel.angleLabels.enumerated()), id: \.offset) { index, label in
+                            VStack(spacing: 2) {
+                                Circle()
+                                    .fill(index < viewModel.capturedAnglesCount ? Color.green : Color.white.opacity(0.3))
+                                    .frame(width: 12, height: 12)
+                                Text(label)
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
                         }
                     }
                     .padding(.top, 8)
@@ -158,6 +179,33 @@ struct FaceScanView: View {
             }
             .foregroundColor(.white)
             .padding(.top, 360)
+        }
+    }
+
+    // MARK: - Quality Warnings Overlay
+    private var qualityWarningsOverlay: some View {
+        VStack(spacing: 8) {
+            if viewModel.lightingQuality == .poor {
+                QualityWarningBadge(
+                    icon: "sun.max.trianglebadge.exclamationmark",
+                    text: "Low Light",
+                    color: .red
+                )
+            } else if viewModel.lightingQuality == .fair {
+                QualityWarningBadge(
+                    icon: "sun.min",
+                    text: "Fair Light",
+                    color: .orange
+                )
+            }
+
+            if viewModel.faceDetected && !viewModel.isDistanceOptimal {
+                QualityWarningBadge(
+                    icon: viewModel.distanceToFace < 0.25 ? "arrow.up.backward.and.arrow.down.forward" : "arrow.down.forward.and.arrow.up.backward",
+                    text: viewModel.distanceToFace < 0.25 ? "Too Close" : "Too Far",
+                    color: .orange
+                )
+            }
         }
     }
 
@@ -318,6 +366,88 @@ struct FaceGuideShape: Shape {
     }
 }
 
+// MARK: - Head Rotation Guide
+struct HeadRotationGuide: View {
+    enum Direction {
+        case center, left, right, up, down
+
+        var arrowRotation: Double {
+            switch self {
+            case .center: return 0
+            case .left: return -90
+            case .right: return 90
+            case .up: return 0
+            case .down: return 180
+            }
+        }
+
+        var showArrow: Bool {
+            self != .center
+        }
+    }
+
+    let direction: Direction
+    @State private var isAnimating = false
+
+    var body: some View {
+        ZStack {
+            if direction.showArrow {
+                // Arrow indicator
+                Image(systemName: direction == .left || direction == .right ? "arrow.left" : "arrow.up")
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+                    .rotationEffect(.degrees(direction.arrowRotation))
+                    .offset(x: arrowOffset.x, y: arrowOffset.y)
+                    .opacity(isAnimating ? 1.0 : 0.3)
+                    .animation(
+                        Animation.easeInOut(duration: 0.6)
+                            .repeatForever(autoreverses: true),
+                        value: isAnimating
+                    )
+                    .onAppear { isAnimating = true }
+                    .onDisappear { isAnimating = false }
+            } else {
+                // Center indicator
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 30))
+                    .foregroundColor(.green)
+            }
+        }
+    }
+
+    private var arrowOffset: CGPoint {
+        switch direction {
+        case .left: return CGPoint(x: -160, y: 0)
+        case .right: return CGPoint(x: 160, y: 0)
+        case .up: return CGPoint(x: 0, y: -180)
+        case .down: return CGPoint(x: 0, y: 180)
+        case .center: return .zero
+        }
+    }
+}
+
+// MARK: - Quality Warning Badge
+struct QualityWarningBadge: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.9))
+        .clipShape(Capsule())
+    }
+}
+
 // MARK: - View Model
 @MainActor
 class FaceScanViewModel: ObservableObject {
@@ -391,6 +521,27 @@ class FaceScanViewModel: ObservableObject {
 
     var capturedMesh: CapturedMesh? {
         scanningService.capturedMesh
+    }
+
+    var angleLabels: [String] {
+        ["Front", "Left", "Center", "Right", "Center"]
+    }
+
+    var currentRotationDirection: HeadRotationGuide.Direction {
+        switch scanProgress {
+        case 0..<0.2:
+            return .center
+        case 0.2..<0.4:
+            return .left
+        case 0.4..<0.6:
+            return .center
+        case 0.6..<0.8:
+            return .right
+        case 0.8..<1.0:
+            return .center
+        default:
+            return .center
+        }
     }
 
     // MARK: - Cancellables
