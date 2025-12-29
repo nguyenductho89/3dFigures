@@ -19,6 +19,7 @@
 		5A9B39E7FC95FB17973C4A54 /* MeshProcessingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85D1739D23BE279B02A83130 /* MeshProcessingService.swift */; };
 		5EAAB233178783708442249D /* Scan3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42FB3BA83A694107245091D /* Scan3DModel.swift */; };
 		846B9C61F4A0828E0030CD01 /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330D226D08A6E872B32A0C5C /* GalleryView.swift */; };
+		8D7E07088FDD454BC7EBA3FE /* ARPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33654A582FF17407BDCE74DB /* ARPreviewView.swift */; };
 		8EAC888AE0FCCC422AF5CC08 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9438A4C8E96E68379FAF1A9 /* ContentView.swift */; };
 		8F9CD46287248AEF454E24CF /* ScanStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BBF3965AEDA92C4374B57E8 /* ScanStorageService.swift */; };
 		942249A55D90AD19EE9F44AA /* BodyScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B76EC1FD5BF5D7C39956BE7 /* BodyScanView.swift */; };
@@ -49,6 +50,7 @@
 
 /* Begin PBXFileReference section */
 		330D226D08A6E872B32A0C5C /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
+		33654A582FF17407BDCE74DB /* ARPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARPreviewView.swift; sourceTree = "<group>"; };
 		49D8ED24D2A98B25DC228312 /* FigureScanner3DTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FigureScanner3DTests.swift; sourceTree = "<group>"; };
 		4C7BFF6DA0EA445BC7B768E4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5487B0820A3416AB94BE93CD /* FigureScanner3DApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FigureScanner3DApp.swift; sourceTree = "<group>"; };
@@ -80,6 +82,7 @@
 		1057CC01D86B7A015ED54328 /* Preview */ = {
 			isa = PBXGroup;
 			children = (
+				33654A582FF17407BDCE74DB /* ARPreviewView.swift */,
 				BBFEEB84555ABAE0BB798102 /* MeshPreviewView.swift */,
 			);
 			path = Preview;
@@ -379,6 +382,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8D7E07088FDD454BC7EBA3FE /* ARPreviewView.swift in Sources */,
 				942249A55D90AD19EE9F44AA /* BodyScanView.swift in Sources */,
 				9F9F9F961415BDEC383B8106 /* BustScanView.swift in Sources */,
 				8EAC888AE0FCCC422AF5CC08 /* ContentView.swift in Sources */,

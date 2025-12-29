@@ -138,34 +138,50 @@ struct BodyScanView: View {
             }
 
             if viewModel.scanState == .scanning {
-                // Circular progress for 360° scan
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 8)
-                        .frame(width: 150, height: 150)
+                HStack(spacing: 30) {
+                    // Vertical coverage indicator (left side)
+                    VerticalCoverageIndicator(coverage: viewModel.verticalCoverage)
 
-                    Circle()
-                        .trim(from: 0, to: CGFloat(viewModel.scanProgress))
-                        .stroke(Color.green, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .frame(width: 150, height: 150)
-                        .rotationEffect(.degrees(-90))
+                    // Circular progress for 360° scan (center)
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.3), lineWidth: 8)
+                            .frame(width: 150, height: 150)
 
-                    VStack {
-                        Text("\(Int(viewModel.scanProgress * 100))%")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
+                        Circle()
+                            .trim(from: 0, to: CGFloat(viewModel.scanProgress))
+                            .stroke(Color.green, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                            .frame(width: 150, height: 150)
+                            .rotationEffect(.degrees(-90))
 
-                        Text("\(viewModel.capturedAnglesCount)/\(viewModel.requiredAngles) angles")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
+                        VStack {
+                            Text("\(Int(viewModel.scanProgress * 100))%")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+
+                            Text("\(viewModel.capturedAnglesCount)/\(viewModel.requiredAngles) angles")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
                     }
+
+                    // Vertical guidance (right side)
+                    VerticalScanGuide(direction: viewModel.verticalGuidanceDirection)
                 }
 
                 Text(viewModel.guidanceText)
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding(.top, 20)
+
+                // Vertical guidance text
+                if viewModel.needsVerticalAdjustment {
+                    Text(viewModel.verticalGuidanceText)
+                        .font(.subheadline)
+                        .foregroundColor(.yellow)
+                        .padding(.top, 4)
+                }
             }
         }
     }
@@ -381,6 +397,36 @@ class BodyScanViewModel: ObservableObject {
         scanningService.capturedMesh
     }
 
+    // MARK: - Vertical Coverage
+    var verticalCoverage: VerticalCoverage {
+        // Simulated vertical coverage based on scan progress
+        let headCovered = scanProgress > 0.1
+        let torsoCovered = scanProgress > 0.3
+        let legsCovered = scanProgress > 0.5
+        let feetCovered = scanProgress > 0.7
+        return VerticalCoverage(head: headCovered, torso: torsoCovered, legs: legsCovered, feet: feetCovered)
+    }
+
+    var needsVerticalAdjustment: Bool {
+        // Check if user needs to adjust camera height
+        scanProgress > 0.2 && !verticalCoverage.isComplete
+    }
+
+    var verticalGuidanceText: String {
+        if !verticalCoverage.head {
+            return "Tilt up to capture head"
+        } else if !verticalCoverage.feet {
+            return "Tilt down to capture feet"
+        }
+        return ""
+    }
+
+    var verticalGuidanceDirection: VerticalScanGuide.Direction {
+        if !verticalCoverage.head { return .up }
+        if !verticalCoverage.feet { return .down }
+        return .center
+    }
+
     // MARK: - Cancellables
     private var cancellables = Set<AnyCancellable>()
 
@@ -503,6 +549,118 @@ class BodyScanViewModel: ObservableObject {
     func updateBodyDetection(_ detected: Bool, distance: Float) {
         bodyDetected = detected
         distanceToBody = distance
+    }
+}
+
+// MARK: - Vertical Coverage Model
+struct VerticalCoverage {
+    let head: Bool
+    let torso: Bool
+    let legs: Bool
+    let feet: Bool
+
+    var isComplete: Bool {
+        head && torso && legs && feet
+    }
+
+    var completionPercentage: Float {
+        let parts = [head, torso, legs, feet]
+        let completed = parts.filter { $0 }.count
+        return Float(completed) / Float(parts.count)
+    }
+}
+
+// MARK: - Vertical Coverage Indicator
+struct VerticalCoverageIndicator: View {
+    let coverage: VerticalCoverage
+
+    var body: some View {
+        VStack(spacing: 4) {
+            // Head
+            BodyPartIndicator(name: "Head", isCovered: coverage.head, icon: "circle.fill")
+            // Torso
+            BodyPartIndicator(name: "Torso", isCovered: coverage.torso, icon: "rectangle.fill")
+            // Legs
+            BodyPartIndicator(name: "Legs", isCovered: coverage.legs, icon: "rectangle.fill")
+            // Feet
+            BodyPartIndicator(name: "Feet", isCovered: coverage.feet, icon: "rectangle.fill")
+        }
+        .padding(8)
+        .background(.ultraThinMaterial)
+        .cornerRadius(12)
+    }
+}
+
+struct BodyPartIndicator: View {
+    let name: String
+    let isCovered: Bool
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(isCovered ? Color.green : Color.white.opacity(0.3))
+                .frame(width: 8, height: heightForPart)
+
+            Text(name)
+                .font(.system(size: 8))
+                .foregroundColor(.white.opacity(0.7))
+        }
+    }
+
+    private var heightForPart: CGFloat {
+        switch name {
+        case "Head": return 12
+        case "Torso": return 20
+        case "Legs": return 24
+        case "Feet": return 8
+        default: return 12
+        }
+    }
+}
+
+// MARK: - Vertical Scan Guide
+struct VerticalScanGuide: View {
+    enum Direction {
+        case up, down, center
+    }
+
+    let direction: Direction
+    @State private var isAnimating = false
+
+    var body: some View {
+        VStack(spacing: 4) {
+            if direction == .up {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.yellow)
+                    .offset(y: isAnimating ? -5 : 0)
+                    .animation(
+                        Animation.easeInOut(duration: 0.5)
+                            .repeatForever(autoreverses: true),
+                        value: isAnimating
+                    )
+                    .onAppear { isAnimating = true }
+            }
+
+            // Body silhouette
+            Image(systemName: "figure.stand")
+                .font(.system(size: 40))
+                .foregroundColor(direction == .center ? .green : .white.opacity(0.5))
+
+            if direction == .down {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.yellow)
+                    .offset(y: isAnimating ? 5 : 0)
+                    .animation(
+                        Animation.easeInOut(duration: 0.5)
+                            .repeatForever(autoreverses: true),
+                        value: isAnimating
+                    )
+                    .onAppear { isAnimating = true }
+            }
+        }
     }
 }
 

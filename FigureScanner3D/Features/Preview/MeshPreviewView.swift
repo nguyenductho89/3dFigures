@@ -37,30 +37,38 @@ struct MeshPreviewView: View {
                     Button("Close") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        // Quick export options
-                        Section("Quick Export") {
-                            Button(action: { viewModel.exportMesh(format: .stl) }) {
-                                Label("Export STL", systemImage: "cube")
-                            }
-                            Button(action: { viewModel.exportMesh(format: .obj) }) {
-                                Label("Export OBJ", systemImage: "cube.transparent")
-                            }
-                            Button(action: { viewModel.exportMesh(format: .ply) }) {
-                                Label("Export PLY", systemImage: "point.3.filled.connected.trianglepath.dotted")
-                            }
+                    HStack(spacing: 16) {
+                        // AR Preview button
+                        Button(action: { viewModel.showARPreview = true }) {
+                            Image(systemName: "arkit")
                         }
 
-                        Divider()
+                        // Export menu
+                        Menu {
+                            // Quick export options
+                            Section("Quick Export") {
+                                Button(action: { viewModel.exportMesh(format: .stl) }) {
+                                    Label("Export STL", systemImage: "cube")
+                                }
+                                Button(action: { viewModel.exportMesh(format: .obj) }) {
+                                    Label("Export OBJ", systemImage: "cube.transparent")
+                                }
+                                Button(action: { viewModel.exportMesh(format: .ply) }) {
+                                    Label("Export PLY", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                                }
+                            }
 
-                        // Advanced export
-                        Button(action: { viewModel.showExportOptions = true }) {
-                            Label("Export Options...", systemImage: "slider.horizontal.3")
+                            Divider()
+
+                            // Advanced export
+                            Button(action: { viewModel.showExportOptions = true }) {
+                                Label("Export Options...", systemImage: "slider.horizontal.3")
+                            }
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
                         }
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
+                        .disabled(viewModel.isExporting)
                     }
-                    .disabled(viewModel.isExporting)
                 }
             }
             .sheet(isPresented: $viewModel.showExportOptions) {
@@ -80,6 +88,9 @@ struct MeshPreviewView: View {
                 if let url = viewModel.exportedFileURL {
                     ShareSheet(activityItems: [url])
                 }
+            }
+            .fullScreenCover(isPresented: $viewModel.showARPreview) {
+                ARPreviewView(mesh: mesh)
             }
             .alert("Export Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -206,6 +217,7 @@ class MeshPreviewViewModel: ObservableObject {
     @Published var showExportSheet = false
     @Published var showExportOptions = false
     @Published var showShareExport = false
+    @Published var showARPreview = false
     @Published var showError = false
     @Published var isExporting = false
     @Published var exportedFileURL: URL?
