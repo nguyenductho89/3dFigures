@@ -44,18 +44,26 @@ actor ScanStorageService {
     }
 
     // MARK: - Initialization
-    private init() {
+    init() {
         Task {
-            await setupDirectories()
+            do {
+                try await setupDirectories()
+            } catch {
+                print("[ScanStorageService] Failed to setup directories: \(error.localizedDescription)")
+            }
         }
     }
 
-    private func setupDirectories() {
+    private func setupDirectories() throws {
         let directories = [scansDirectory, meshesDirectory, texturesDirectory, thumbnailsDirectory, exportsDirectory]
 
         for directory in directories {
             if !fileManager.fileExists(atPath: directory.path) {
-                try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+                do {
+                    try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+                } catch {
+                    throw StorageError.directoryCreationFailed(directory.lastPathComponent)
+                }
             }
         }
     }
@@ -399,6 +407,7 @@ actor ScanStorageService {
         case failedToLoadFile
         case fileNotFound
         case invalidData
+        case directoryCreationFailed(String)
 
         var errorDescription: String? {
             switch self {
@@ -406,6 +415,7 @@ actor ScanStorageService {
             case .failedToLoadFile: return "Failed to load file"
             case .fileNotFound: return "File not found"
             case .invalidData: return "Invalid data format"
+            case .directoryCreationFailed(let name): return "Failed to create directory: \(name)"
             }
         }
     }
