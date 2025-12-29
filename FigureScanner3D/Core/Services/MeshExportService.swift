@@ -5,7 +5,50 @@ import CoreImage
 import ImageIO
 import Compression
 
-/// Service for exporting 3D meshes to various file formats
+/// Service for exporting 3D meshes to various file formats.
+///
+/// This service handles the conversion of processed 3D mesh data into
+/// standard file formats suitable for 3D printing, modeling software,
+/// and AR applications.
+///
+/// ## Supported Formats
+///
+/// | Format | Extension | Description | Texture Support |
+/// |--------|-----------|-------------|-----------------|
+/// | STL    | .stl      | 3D Printing | No |
+/// | OBJ    | .obj      | Universal with materials | Yes (.mtl) |
+/// | PLY    | .ply      | Point cloud and mesh | No |
+/// | USDZ   | .usdz     | AR Quick Look | Yes (planned) |
+///
+/// ## Usage Example
+///
+/// ```swift
+/// let exportService = MeshExportService()
+///
+/// // Basic export
+/// let result = try await exportService.export(
+///     mesh: processedMesh,
+///     format: .obj,
+///     fileName: "MyScan"
+/// )
+/// print("Exported to: \(result.fileURL)")
+///
+/// // With custom options
+/// var options = ExportOptions()
+/// options.scale = 1000.0  // Convert to millimeters
+/// options.createZipArchive = true
+/// let result = try await exportService.export(
+///     mesh: processedMesh,
+///     format: .obj,
+///     fileName: "MyScan",
+///     options: options
+/// )
+/// ```
+///
+/// ## Output Directory
+///
+/// Exported files are saved to `Documents/Exports/` and can be shared
+/// via the iOS share sheet or accessed through the Files app.
 actor MeshExportService {
 
     // MARK: - Export Format
@@ -119,7 +162,26 @@ actor MeshExportService {
 
     // MARK: - Public Methods
 
-    /// Export mesh to specified format
+    /// Exports a processed mesh to the specified file format.
+    ///
+    /// This method handles the complete export process including:
+    /// - Applying transformations (centering, scaling)
+    /// - Converting mesh data to the target format
+    /// - Saving texture and material files (for OBJ format)
+    /// - Optionally creating a ZIP archive of all files
+    ///
+    /// - Parameters:
+    ///   - mesh: The processed mesh to export
+    ///   - format: Target file format (.stl, .obj, .ply)
+    ///   - fileName: Base name for the output file (without extension)
+    ///   - options: Export options including scale, centering, and texture settings
+    ///
+    /// - Returns: An `ExportResult` containing the file URL and metadata
+    ///
+    /// - Throws:
+    ///   - `ExportError.noMeshData` if the mesh has no vertices
+    ///   - `ExportError.unsupportedFormat` if USDZ is requested (not yet implemented)
+    ///   - `ExportError.writeFailed` if file writing fails
     func export(
         mesh: MeshProcessingService.ProcessedMesh,
         format: ExportFormat,

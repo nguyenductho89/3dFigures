@@ -2,7 +2,38 @@ import Foundation
 import Accelerate
 import simd
 
-/// Service for processing and optimizing captured 3D meshes
+/// Service for processing and optimizing captured 3D meshes.
+///
+/// This service provides a complete mesh processing pipeline for improving
+/// the quality of 3D scans captured via LiDAR. The processing includes:
+///
+/// - **Noise Removal**: Eliminates outlier vertices that are far from their neighbors
+/// - **Hole Filling**: Repairs small gaps in the mesh surface
+/// - **Laplacian Smoothing**: Reduces surface roughness while preserving shape
+/// - **Normal Recalculation**: Computes accurate vertex normals for proper shading
+/// - **Decimation**: Reduces vertex count for smaller file sizes (optional)
+/// - **Texture Coordinate Generation**: Creates UV mapping for texture application
+///
+/// ## Usage Example
+///
+/// ```swift
+/// let processingService = MeshProcessingService()
+///
+/// // With default options
+/// let processed = try await processingService.process(capturedMesh)
+///
+/// // With custom options and progress tracking
+/// let options = ProcessingOptions(smoothingIterations: 5, decimationRatio: 0.3)
+/// let processed = try await processingService.process(capturedMesh, options: options) { step, progress in
+///     print("Step: \(step.rawValue), Progress: \(progress * 100)%")
+/// }
+/// ```
+///
+/// ## Performance Considerations
+///
+/// - Large meshes (>100k vertices) are processed in parallel using `DispatchQueue.concurrentPerform`
+/// - Mesh topology is computed once and reused across processing steps
+/// - Processing supports task cancellation via Swift's cooperative cancellation
 actor MeshProcessingService {
 
     // MARK: - Processing Step (for progress reporting)
@@ -90,17 +121,42 @@ actor MeshProcessingService {
 
     // MARK: - Public Methods
 
-    /// Process a captured mesh with default options
+    /// Processes a captured mesh with default options.
+    ///
+    /// Applies the standard processing pipeline with balanced quality settings.
+    ///
+    /// - Parameter mesh: The raw captured mesh from LiDAR scanning
+    /// - Returns: An optimized mesh ready for export or display
+    /// - Throws: Processing errors if mesh data is invalid
     func process(_ mesh: CapturedMesh) async throws -> ProcessedMesh {
         try await process(mesh, options: ProcessingOptions(), progress: nil)
     }
 
-    /// Process a captured mesh with custom options
+    /// Processes a captured mesh with custom processing options.
+    ///
+    /// - Parameters:
+    ///   - mesh: The raw captured mesh from LiDAR scanning
+    ///   - options: Custom processing options (smoothing, decimation, etc.)
+    /// - Returns: An optimized mesh ready for export or display
+    /// - Throws: Processing errors if mesh data is invalid
     func process(_ mesh: CapturedMesh, options: ProcessingOptions) async throws -> ProcessedMesh {
         try await process(mesh, options: options, progress: nil)
     }
 
-    /// Process a captured mesh with progress reporting
+    /// Processes a captured mesh with progress reporting.
+    ///
+    /// This method provides real-time progress updates during processing,
+    /// useful for displaying progress indicators in the UI.
+    ///
+    /// - Parameters:
+    ///   - mesh: The raw captured mesh from LiDAR scanning
+    ///   - options: Processing options including smoothing and decimation settings
+    ///   - progress: A callback that receives the current step and progress value (0.0-1.0)
+    /// - Returns: An optimized mesh ready for export or display
+    /// - Throws: Processing errors if mesh data is invalid or processing fails
+    ///
+    /// - Note: The progress callback is invoked on an unspecified thread.
+    ///         Use `@MainActor` dispatch if updating UI elements.
     func process(
         _ mesh: CapturedMesh,
         options: ProcessingOptions,
