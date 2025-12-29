@@ -9,7 +9,7 @@ import Compression
 actor MeshExportService {
 
     // MARK: - Export Format
-    enum ExportFormat: String, CaseIterable {
+    enum ExportFormat: String, CaseIterable, Codable {
         case stl = "STL"
         case obj = "OBJ"
         case ply = "PLY"
@@ -22,6 +22,15 @@ actor MeshExportService {
 
         var fileExtension: String {
             rawValue.lowercased()
+        }
+
+        var displayName: String {
+            switch self {
+            case .stl: return "STL (3D Printing)"
+            case .obj: return "OBJ (with Texture)"
+            case .ply: return "PLY (Point Cloud)"
+            case .usdz: return "USDZ (AR Quick Look)"
+            }
         }
 
         var mimeType: String {
@@ -44,6 +53,10 @@ actor MeshExportService {
 
         var isSupported: Bool {
             Self.supportedFormats.contains(self)
+        }
+
+        var supportsTexture: Bool {
+            self == .obj || self == .usdz
         }
     }
 

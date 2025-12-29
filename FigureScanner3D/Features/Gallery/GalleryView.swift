@@ -535,7 +535,7 @@ class GalleryViewModel: ObservableObject {
             // Export the mesh to the selected format
             let result = try await exportService.export(
                 mesh: mesh,
-                format: format.meshExportFormat,
+                format: format,
                 fileName: scan.name.sanitizedFileName
             )
 

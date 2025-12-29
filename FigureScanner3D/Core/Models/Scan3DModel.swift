@@ -137,38 +137,8 @@ struct ExportRecord: Identifiable, Codable {
 }
 
 // MARK: - Export Format
-enum ExportFormat: String, Codable, CaseIterable {
-    case stl = "STL"
-    case obj = "OBJ"
-    case ply = "PLY"
-    case usdz = "USDZ"
-
-    var fileExtension: String {
-        rawValue.lowercased()
-    }
-
-    var displayName: String {
-        switch self {
-        case .stl: return "STL (3D Printing)"
-        case .obj: return "OBJ (with Texture)"
-        case .ply: return "PLY (Point Cloud)"
-        case .usdz: return "USDZ (AR Quick Look)"
-        }
-    }
-
-    var supportsTexture: Bool {
-        self == .obj || self == .usdz
-    }
-
-    var meshExportFormat: MeshExportService.ExportFormat {
-        switch self {
-        case .stl: return .stl
-        case .obj: return .obj
-        case .ply: return .ply
-        case .usdz: return .usdz
-        }
-    }
-}
+/// Type alias to use the unified ExportFormat from MeshExportService
+typealias ExportFormat = MeshExportService.ExportFormat
 
 // MARK: - Scan Status
 enum ScanStatus {
