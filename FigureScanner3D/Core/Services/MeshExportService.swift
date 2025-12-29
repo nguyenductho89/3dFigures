@@ -3,6 +3,7 @@ import simd
 import UniformTypeIdentifiers
 import CoreImage
 import ImageIO
+import Compression
 
 /// Service for exporting 3D meshes to various file formats
 actor MeshExportService {
@@ -44,6 +45,9 @@ actor MeshExportService {
         var binary: Bool = true  // For STL and PLY
         var includeNormals: Bool = true
         var includeTextureCoords: Bool = true
+        var includeTexture: Bool = true
+        var textureResolution: Int = 2048
+        var createZipArchive: Bool = false
     }
 
     // MARK: - Export Result
@@ -55,6 +59,21 @@ actor MeshExportService {
         let faceCount: Int
         let textureURL: URL?      // Texture image file (if exported)
         let materialURL: URL?     // MTL file (for OBJ format)
+        let isZipArchive: Bool
+        let additionalFiles: [URL]
+
+        init(fileURL: URL, format: ExportFormat, fileSize: Int64, vertexCount: Int, faceCount: Int,
+             textureURL: URL? = nil, materialURL: URL? = nil, isZipArchive: Bool = false, additionalFiles: [URL] = []) {
+            self.fileURL = fileURL
+            self.format = format
+            self.fileSize = fileSize
+            self.vertexCount = vertexCount
+            self.faceCount = faceCount
+            self.textureURL = textureURL
+            self.materialURL = materialURL
+            self.isZipArchive = isZipArchive
+            self.additionalFiles = additionalFiles
+        }
     }
 
     // MARK: - Errors
@@ -63,6 +82,7 @@ actor MeshExportService {
         case invalidFormat
         case writeFailed(String)
         case unsupportedFormat
+        case zipCreationFailed(String)
 
         var errorDescription: String? {
             switch self {
@@ -70,6 +90,7 @@ actor MeshExportService {
             case .invalidFormat: return "Invalid export format"
             case .writeFailed(let reason): return "Failed to write file: \(reason)"
             case .unsupportedFormat: return "Export format not supported"
+            case .zipCreationFailed(let reason): return "Failed to create ZIP archive: \(reason)"
             }
         }
     }
@@ -125,9 +146,12 @@ actor MeshExportService {
             )
         case .obj:
             // Export texture if available
-            if let textureData = mesh.textureData, let atlasImage = textureData.atlasImage {
+            if options.includeTexture, let textureData = mesh.textureData, let atlasImage = textureData.atlasImage {
                 textureURL = exportDir.appendingPathComponent("\(fileName)_texture.jpg")
-                try await exportTextureImage(atlasImage, to: textureURL!)
+
+                // Resize texture if needed
+                let resizedImage = resizeImage(atlasImage, to: options.textureResolution)
+                try await exportTextureImage(resizedImage ?? atlasImage, to: textureURL!)
 
                 // Export MTL file
                 materialURL = exportDir.appendingPathComponent("\(fileName).mtl")
@@ -145,6 +169,37 @@ actor MeshExportService {
                 materialName: materialURL != nil ? fileName : nil,
                 to: fileURL
             )
+
+            // Create ZIP archive if requested
+            if options.createZipArchive && (textureURL != nil || materialURL != nil) {
+                var filesToZip: [URL] = [fileURL]
+                if let mtlURL = materialURL { filesToZip.append(mtlURL) }
+                if let texURL = textureURL { filesToZip.append(texURL) }
+
+                let zipURL = exportDir.appendingPathComponent("\(fileName).zip")
+                try await createZipArchive(from: filesToZip, to: zipURL)
+
+                // Clean up individual files
+                for file in filesToZip {
+                    try? FileManager.default.removeItem(at: file)
+                }
+
+                // Get ZIP file size
+                let zipAttributes = try FileManager.default.attributesOfItem(atPath: zipURL.path)
+                let zipFileSize = zipAttributes[.size] as? Int64 ?? 0
+
+                return ExportResult(
+                    fileURL: zipURL,
+                    format: format,
+                    fileSize: zipFileSize,
+                    vertexCount: vertices.count,
+                    faceCount: mesh.faceCount,
+                    textureURL: nil,
+                    materialURL: nil,
+                    isZipArchive: true,
+                    additionalFiles: []
+                )
+            }
         case .ply:
             try await exportPLY(
                 vertices: vertices,
@@ -534,5 +589,119 @@ actor MeshExportService {
             sum += v
         }
         return sum / Float(vertices.count)
+    }
+
+    // MARK: - Image Resizing
+
+    private func resizeImage(_ image: CGImage, to maxSize: Int) -> CGImage? {
+        let width = image.width
+        let height = image.height
+
+        // If already smaller, return original
+        if width <= maxSize && height <= maxSize {
+            return image
+        }
+
+        // Calculate new size maintaining aspect ratio
+        let aspectRatio = CGFloat(width) / CGFloat(height)
+        var newWidth: CGFloat
+        var newHeight: CGFloat
+
+        if width > height {
+            newWidth = CGFloat(maxSize)
+            newHeight = newWidth / aspectRatio
+        } else {
+            newHeight = CGFloat(maxSize)
+            newWidth = newHeight * aspectRatio
+        }
+
+        let colorSpace = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let context = CGContext(
+            data: nil,
+            width: Int(newWidth),
+            height: Int(newHeight),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+
+        return context.makeImage()
+    }
+
+    // MARK: - ZIP Archive Creation
+
+    private func createZipArchive(from files: [URL], to zipURL: URL) async throws {
+        // Create a temporary directory for the archive contents
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        // Copy files to temp directory
+        for file in files {
+            let destURL = tempDir.appendingPathComponent(file.lastPathComponent)
+            try FileManager.default.copyItem(at: file, to: destURL)
+        }
+
+        // Create ZIP using FileManager's built-in archiving
+        // We use NSFileCoordinator for proper file coordination
+        let coordinator = NSFileCoordinator()
+        var error: NSError?
+
+        coordinator.coordinate(readingItemAt: tempDir, options: .forUploading, error: &error) { zipTempURL in
+            do {
+                // Move the created ZIP to the final destination
+                if FileManager.default.fileExists(atPath: zipURL.path) {
+                    try FileManager.default.removeItem(at: zipURL)
+                }
+                try FileManager.default.copyItem(at: zipTempURL, to: zipURL)
+            } catch {
+                // Error will be captured in the outer scope
+            }
+        }
+
+        if let coordinatorError = error {
+            throw ExportError.zipCreationFailed(coordinatorError.localizedDescription)
+        }
+
+        // Verify the ZIP was created
+        guard FileManager.default.fileExists(atPath: zipURL.path) else {
+            throw ExportError.zipCreationFailed("ZIP file was not created")
+        }
+    }
+
+    // MARK: - Export with Configuration
+
+    /// Export mesh using ExportConfiguration
+    func export(
+        mesh: CapturedMesh,
+        configuration: ExportConfiguration,
+        fileName: String
+    ) async throws -> ExportResult {
+        let options = ExportOptions(
+            scale: configuration.scale,
+            centerMesh: configuration.centerMesh,
+            binary: configuration.binaryFormat,
+            includeNormals: configuration.includeNormals,
+            includeTextureCoords: configuration.includeTextureCoords,
+            includeTexture: configuration.includeTexture,
+            textureResolution: configuration.textureResolution.size,
+            createZipArchive: configuration.createZipArchive
+        )
+
+        return try await export(
+            mesh: mesh,
+            format: configuration.format,
+            fileName: fileName,
+            options: options
+        )
     }
 }

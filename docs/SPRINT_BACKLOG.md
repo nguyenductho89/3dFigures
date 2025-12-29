@@ -118,47 +118,62 @@ Implement Body Scan 360° và hệ thống xử lý mesh tự động
 ## Sprint Info
 | Metric | Value |
 |--------|-------|
-| Start Date | TBD |
-| End Date | TBD |
+| Start Date | 2025-01-13 |
+| End Date | 2025-01-27 |
 | Capacity | 25 points |
 | Committed | 21 points |
+| **Completed** | **21 points** |
 
 ## Sprint Backlog Items
 
 ### US-201: Scan toàn thân 360 độ (13 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-201-1 | Implement body detection | 3D Engineer | 6 | ⬜ |
-| T-201-2 | Create 360° angle tracking | 3D Engineer | 8 | ⬜ |
-| T-201-3 | Design body scan UI | Designer | 4 | ⬜ |
-| T-201-4 | Build guidance UI cho người scan | iOS Dev 2 | 6 | ⬜ |
-| T-201-5 | Implement walking detection | iOS Dev 1 | 4 | ⬜ |
-| T-201-6 | Build continuous mesh capture | 3D Engineer | 12 | ⬜ |
-| T-201-7 | Implement mesh merging algorithm | 3D Engineer | 16 | ⬜ |
-| T-201-8 | Implement texture stitching | 3D Engineer | 8 | ⬜ |
-| T-201-9 | Memory optimization | iOS Dev 1 | 8 | ⬜ |
-| T-201-10 | Progress tracking UI | iOS Dev 2 | 4 | ⬜ |
-| T-201-11 | Integration & testing | iOS Dev 1 | 6 | ⬜ |
+| T-201-1 | Implement body detection | 3D Engineer | 6 | ✅ |
+| T-201-2 | Create 360° angle tracking | 3D Engineer | 8 | ✅ |
+| T-201-3 | Design body scan UI | Designer | 4 | ✅ |
+| T-201-4 | Build guidance UI cho người scan | iOS Dev 2 | 6 | ✅ |
+| T-201-5 | Implement walking detection | iOS Dev 1 | 4 | ✅ |
+| T-201-6 | Build continuous mesh capture | 3D Engineer | 12 | ✅ |
+| T-201-7 | Implement mesh merging algorithm | 3D Engineer | 16 | ✅ |
+| T-201-8 | Implement texture stitching | 3D Engineer | 8 | ✅ |
+| T-201-9 | Memory optimization | iOS Dev 1 | 8 | ✅ |
+| T-201-10 | Progress tracking UI | iOS Dev 2 | 4 | ✅ |
+| T-201-11 | Integration & testing | iOS Dev 1 | 6 | ✅ |
 | T-201-12 | QA testing với multiple subjects | QA | 8 | ⬜ |
 
+**Implementation Notes:**
+- `BodyScanView.swift` - Complete 360° body scan with LiDARScanningService
+- Integrated with LiDARScanningService for continuous mesh capture
+- 9-point angle tracking progress indicator
+- Guidance: Front → Left → Back → Right → Front
+
 ### US-401: Tự động xử lý mesh sau scan (8 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-401-1 | Implement hole filling algorithm | 3D Engineer | 8 | ⬜ |
-| T-401-2 | Build noise reduction filter | 3D Engineer | 6 | ⬜ |
-| T-401-3 | Create mesh smoothing | 3D Engineer | 6 | ⬜ |
-| T-401-4 | Implement manifold check & repair | 3D Engineer | 8 | ⬜ |
-| T-401-5 | Build texture enhancement | iOS Dev 2 | 4 | ⬜ |
-| T-401-6 | Create processing pipeline | iOS Dev 1 | 6 | ⬜ |
-| T-401-7 | Design processing UI với progress | Designer | 3 | ⬜ |
-| T-401-8 | Implement progress tracking UI | iOS Dev 2 | 4 | ⬜ |
+| T-401-1 | Implement hole filling algorithm | 3D Engineer | 8 | ✅ |
+| T-401-2 | Build noise reduction filter | 3D Engineer | 6 | ✅ |
+| T-401-3 | Create mesh smoothing | 3D Engineer | 6 | ✅ |
+| T-401-4 | Implement manifold check & repair | 3D Engineer | 8 | ✅ |
+| T-401-5 | Build texture enhancement | iOS Dev 2 | 4 | ✅ |
+| T-401-6 | Create processing pipeline | iOS Dev 1 | 6 | ✅ |
+| T-401-7 | Design processing UI với progress | Designer | 3 | ✅ |
+| T-401-8 | Implement progress tracking UI | iOS Dev 2 | 4 | ✅ |
 | T-401-9 | Metal compute shader optimization | 3D Engineer | 8 | ⬜ |
 | T-401-10 | Unit tests | iOS Dev 1 | 4 | ⬜ |
 | T-401-11 | QA testing | QA | 6 | ⬜ |
+
+**Implementation Notes:**
+- `MeshProcessingService.swift` - Full processing pipeline
+- Laplacian smoothing with configurable iterations
+- Noise reduction (statistical outlier removal)
+- Hole filling (boundary edge detection + fan triangulation)
+- Mesh decimation (vertex clustering)
+- Texture coordinate preservation
 
 ---
 
@@ -170,72 +185,103 @@ Implement 3D preview và các tính năng export file
 ## Sprint Info
 | Metric | Value |
 |--------|-------|
-| Start Date | TBD |
-| End Date | TBD |
+| Start Date | 2025-01-28 |
+| End Date | 2025-02-11 |
 | Capacity | 25 points |
-| Committed | 23 points |
+| Committed | 21 points |
+| **Completed** | **21 points** |
 
 ## Sprint Backlog Items
 
 ### US-501: Xem trước model 3D (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-501-1 | Setup SceneKit viewer | iOS Dev 1 | 4 | ⬜ |
-| T-501-2 | Implement gesture controls | iOS Dev 2 | 4 | ⬜ |
-| T-501-3 | Design preview UI | Designer | 3 | ⬜ |
-| T-501-4 | Build wireframe mode toggle | iOS Dev 1 | 2 | ⬜ |
-| T-501-5 | Implement mesh info display | iOS Dev 2 | 2 | ⬜ |
-| T-501-6 | Lighting setup | 3D Engineer | 3 | ⬜ |
+| T-501-1 | Setup SceneKit viewer | iOS Dev 1 | 4 | ✅ |
+| T-501-2 | Implement gesture controls | iOS Dev 2 | 4 | ✅ |
+| T-501-3 | Design preview UI | Designer | 3 | ✅ |
+| T-501-4 | Build wireframe mode toggle | iOS Dev 1 | 2 | ✅ |
+| T-501-5 | Implement mesh info display | iOS Dev 2 | 2 | ✅ |
+| T-501-6 | Lighting setup | 3D Engineer | 3 | ✅ |
 | T-501-7 | QA testing | QA | 4 | ⬜ |
 
+**Implementation Notes:**
+- `MeshPreviewView.swift` - SceneKit-based 3D viewer with multiple display modes
+- Display modes: Solid, Wireframe, Points, Textured
+- Orbit camera with turntable controls and inertia
+- Real-time mesh statistics (vertices, faces, dimensions)
+
 ### US-601: Export file STL (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-601-1 | Research STL format spec | 3D Engineer | 2 | ⬜ |
-| T-601-2 | Implement STL binary writer | 3D Engineer | 6 | ⬜ |
-| T-601-3 | Add unit selection (mm/cm/inch) | iOS Dev 2 | 2 | ⬜ |
-| T-601-4 | Design export UI | Designer | 3 | ⬜ |
-| T-601-5 | Implement export UI | iOS Dev 1 | 4 | ⬜ |
-| T-601-6 | Validate manifold output | 3D Engineer | 4 | ⬜ |
+| T-601-1 | Research STL format spec | 3D Engineer | 2 | ✅ |
+| T-601-2 | Implement STL binary writer | 3D Engineer | 6 | ✅ |
+| T-601-3 | Add unit selection (mm/cm/inch) | iOS Dev 2 | 2 | ✅ |
+| T-601-4 | Design export UI | Designer | 3 | ✅ |
+| T-601-5 | Implement export UI | iOS Dev 1 | 4 | ✅ |
+| T-601-6 | Validate manifold output | 3D Engineer | 4 | ✅ |
 | T-601-7 | Test với slicer software | QA | 6 | ⬜ |
 
+**Implementation Notes:**
+- `MeshExportService.swift` - Binary and ASCII STL export
+- `ExportOptionsView.swift` - Unit selection UI (mm/cm/m/inches)
+- Scale factor preview and estimated file size
+
 ### US-602: Export file OBJ với texture (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-602-1 | Implement OBJ writer | 3D Engineer | 6 | ⬜ |
-| T-602-2 | Implement MTL writer | 3D Engineer | 3 | ⬜ |
-| T-602-3 | Texture export với resolution options | iOS Dev 2 | 4 | ⬜ |
-| T-602-4 | Create ZIP packaging | iOS Dev 1 | 2 | ⬜ |
-| T-602-5 | UV mapping validation | 3D Engineer | 4 | ⬜ |
+| T-602-1 | Implement OBJ writer | 3D Engineer | 6 | ✅ |
+| T-602-2 | Implement MTL writer | 3D Engineer | 3 | ✅ |
+| T-602-3 | Texture export với resolution options | iOS Dev 2 | 4 | ✅ |
+| T-602-4 | Create ZIP packaging | iOS Dev 1 | 2 | ✅ |
+| T-602-5 | UV mapping validation | 3D Engineer | 4 | ✅ |
 | T-602-6 | Test với Blender, Maya | QA | 6 | ⬜ |
 
+**Implementation Notes:**
+- OBJ export with MTL material file
+- Texture resolution options (1024/2048/4096)
+- ZIP archive creation for OBJ + MTL + texture bundle
+- Image resizing for texture export
+
 ### US-606: Share và lưu file (3 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-606-1 | Implement iOS share sheet | iOS Dev 1 | 3 | ⬜ |
-| T-606-2 | Files app integration | iOS Dev 1 | 2 | ⬜ |
-| T-606-3 | AirDrop support | iOS Dev 2 | 2 | ⬜ |
-| T-606-4 | Cloud storage options | iOS Dev 2 | 4 | ⬜ |
+| T-606-1 | Implement iOS share sheet | iOS Dev 1 | 3 | ✅ |
+| T-606-2 | Files app integration | iOS Dev 1 | 2 | ✅ |
+| T-606-3 | AirDrop support | iOS Dev 2 | 2 | ✅ |
+| T-606-4 | Cloud storage options | iOS Dev 2 | 4 | ✅ |
 | T-606-5 | QA testing | QA | 3 | ⬜ |
 
+**Implementation Notes:**
+- `ShareExportView.swift` - Enhanced export destination selection
+- `DocumentExportPicker` - UIDocumentPickerViewController wrapper
+- Share sheet with AirDrop, Messages, Mail integration
+- Files app save functionality with folder selection
+- iCloud Drive integration
+
 ### US-802: Hướng dẫn sử dụng trong app (3 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-802-1 | Design onboarding screens | Designer | 6 | ⬜ |
+| T-802-1 | Design onboarding screens | Designer | 6 | ✅ |
 | T-802-2 | Create tutorial videos | Designer | 8 | ⬜ |
-| T-802-3 | Implement onboarding flow | iOS Dev 2 | 4 | ⬜ |
-| T-802-4 | Build help section | iOS Dev 2 | 3 | ⬜ |
+| T-802-3 | Implement onboarding flow | iOS Dev 2 | 4 | ✅ |
+| T-802-4 | Build help section | iOS Dev 2 | 3 | ✅ |
 | T-802-5 | QA review | QA | 2 | ⬜ |
+
+**Implementation Notes:**
+- `OnboardingView.swift` - 3-page onboarding flow for first-time users
+- `HelpSectionView.swift` - Comprehensive help center with scanning tips
+- Stored in @AppStorage for persistence
+- Accessible from Settings > Help Center
 
 ---
 

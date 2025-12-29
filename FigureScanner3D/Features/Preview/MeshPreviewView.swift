@@ -24,6 +24,11 @@ struct MeshPreviewView: View {
                     Spacer()
                     controlsOverlay
                 }
+
+                // Export progress overlay
+                if viewModel.isExporting {
+                    exportingOverlay
+                }
             }
             .navigationTitle("Preview")
             .navigationBarTitleDisplayMode(.inline)
@@ -33,18 +38,42 @@ struct MeshPreviewView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button(action: { viewModel.exportMesh(format: .stl) }) {
-                            Label("Export STL", systemImage: "cube")
+                        // Quick export options
+                        Section("Quick Export") {
+                            Button(action: { viewModel.exportMesh(format: .stl) }) {
+                                Label("Export STL", systemImage: "cube")
+                            }
+                            Button(action: { viewModel.exportMesh(format: .obj) }) {
+                                Label("Export OBJ", systemImage: "cube.transparent")
+                            }
+                            Button(action: { viewModel.exportMesh(format: .ply) }) {
+                                Label("Export PLY", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                            }
                         }
-                        Button(action: { viewModel.exportMesh(format: .obj) }) {
-                            Label("Export OBJ", systemImage: "cube.transparent")
-                        }
-                        Button(action: { viewModel.exportMesh(format: .ply) }) {
-                            Label("Export PLY", systemImage: "point.3.filled.connected.trianglepath.dotted")
+
+                        Divider()
+
+                        // Advanced export
+                        Button(action: { viewModel.showExportOptions = true }) {
+                            Label("Export Options...", systemImage: "slider.horizontal.3")
                         }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .disabled(viewModel.isExporting)
+                }
+            }
+            .sheet(isPresented: $viewModel.showExportOptions) {
+                ExportOptionsView(mesh: mesh) { config in
+                    viewModel.exportWithConfiguration(config)
+                }
+            }
+            .sheet(isPresented: $viewModel.showShareExport) {
+                if let url = viewModel.exportedFileURL {
+                    ShareExportView(
+                        fileURL: url,
+                        fileName: url.deletingPathExtension().lastPathComponent
+                    )
                 }
             }
             .sheet(isPresented: $viewModel.showExportSheet) {
@@ -57,6 +86,27 @@ struct MeshPreviewView: View {
             } message: {
                 Text(viewModel.errorMessage ?? "Unknown error")
             }
+        }
+    }
+
+    // MARK: - Exporting Overlay
+    private var exportingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+
+                Text("Exporting...")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+            .padding(32)
+            .background(.ultraThinMaterial)
+            .cornerRadius(16)
         }
     }
 
@@ -154,7 +204,10 @@ class MeshPreviewViewModel: ObservableObject {
         didSet { updateDisplayMode() }
     }
     @Published var showExportSheet = false
+    @Published var showExportOptions = false
+    @Published var showShareExport = false
     @Published var showError = false
+    @Published var isExporting = false
     @Published var exportedFileURL: URL?
     @Published var errorMessage: String?
 
@@ -353,6 +406,9 @@ class MeshPreviewViewModel: ObservableObject {
 
     func exportMesh(format: MeshExportService.ExportFormat) {
         Task {
+            isExporting = true
+            defer { isExporting = false }
+
             do {
                 let exportService = MeshExportService()
                 let result = try await exportService.export(
@@ -362,6 +418,30 @@ class MeshPreviewViewModel: ObservableObject {
                 )
                 exportedFileURL = result.fileURL
                 showExportSheet = true
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
+    }
+
+    func exportWithConfiguration(_ config: ExportConfiguration) {
+        Task {
+            isExporting = true
+            defer { isExporting = false }
+
+            do {
+                let exportService = MeshExportService()
+                let timestamp = Int(Date().timeIntervalSince1970)
+                let fileName = "scan_\(timestamp)"
+
+                let result = try await exportService.export(
+                    mesh: mesh,
+                    configuration: config,
+                    fileName: fileName
+                )
+                exportedFileURL = result.fileURL
+                showShareExport = true
             } catch {
                 errorMessage = error.localizedDescription
                 showError = true

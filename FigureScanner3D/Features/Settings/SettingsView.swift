@@ -4,6 +4,8 @@ struct SettingsView: View {
     @AppStorage("scanQuality") private var scanQuality = ScanQualitySetting.high
     @AppStorage("autoProcess") private var autoProcess = true
     @AppStorage("hapticFeedback") private var hapticFeedback = true
+    @State private var showHelp = false
+    @State private var showOnboarding = false
 
     var body: some View {
         NavigationStack {
@@ -46,6 +48,23 @@ struct SettingsView: View {
                     }
                 }
 
+                // Help & Support
+                Section("Help & Support") {
+                    Button {
+                        showHelp = true
+                    } label: {
+                        Label("Help Center", systemImage: "questionmark.circle")
+                    }
+                    .foregroundColor(.primary)
+
+                    Button {
+                        showOnboarding = true
+                    } label: {
+                        Label("View Tutorial", systemImage: "book")
+                    }
+                    .foregroundColor(.primary)
+                }
+
                 // About
                 Section("About") {
                     HStack {
@@ -55,20 +74,40 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    NavigationLink("Tutorial") {
-                        TutorialView()
-                    }
-
                     NavigationLink("Privacy Policy") {
                         PrivacyPolicyView()
                     }
 
-                    Link("Rate App", destination: URL(string: "https://apps.apple.com")!)
+                    Link(destination: URL(string: "https://apps.apple.com")!) {
+                        HStack {
+                            Text("Rate App")
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .foregroundColor(.primary)
 
-                    Link("Contact Support", destination: URL(string: "mailto:support@example.com")!)
+                    Link(destination: URL(string: "mailto:support@example.com")!) {
+                        HStack {
+                            Text("Contact Support")
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .foregroundColor(.primary)
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showHelp) {
+                HelpSectionView()
+            }
+            .fullScreenCover(isPresented: $showOnboarding) {
+                OnboardingView()
+            }
         }
     }
 }

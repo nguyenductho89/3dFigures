@@ -2,7 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab: Tab = .home
+    @State private var showOnboarding = false
 
     enum Tab {
         case home
@@ -17,6 +19,14 @@ struct ContentView: View {
             } else {
                 UnsupportedDeviceView()
             }
+        }
+        .onAppear {
+            if !hasCompletedOnboarding {
+                showOnboarding = true
+            }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView()
         }
     }
 
