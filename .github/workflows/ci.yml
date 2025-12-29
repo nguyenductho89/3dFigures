@@ -24,18 +24,16 @@ jobs:
           if ! command -v xcodegen &> /dev/null; then
             brew install xcodegen
           fi
-          if ! command -v xcpretty &> /dev/null; then
-            gem install xcpretty
-          fi
 
       - name: Generate Xcode Project
         run: xcodegen generate
 
       - name: List Available Simulators
-        run: xcrun simctl list devices available | grep -i "iphone"
+        run: xcrun simctl list devices available | grep -i "iphone" | head -10
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild build \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
@@ -43,10 +41,11 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | xcpretty --color || true
+            | tee build.log | grep -E "^(Build|Compile|Ld|error:|warning:|\*\*)"
 
       - name: Run Tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
@@ -55,7 +54,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | xcpretty --color || true
+            | tee test.log | grep -E "^(Test|Executed|error:|warning:|\*\*)" || true
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
