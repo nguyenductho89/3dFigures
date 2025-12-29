@@ -1,9 +1,19 @@
 # Technical Architecture Document
 ## 3D Figure Scanner App
 
-**Version**: 1.0
+**Version**: 1.1
 **Last Updated**: December 2024
 **Author**: Engineering Team
+**Status**: Implementation In Progress
+
+---
+
+## Document History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | 2024-12 | Initial architecture design |
+| 1.1 | 2024-12-29 | Added implemented LiDAR scanning services (LiDARScanningService, MeshProcessingService, MeshExportService) |
 
 ---
 
@@ -2490,11 +2500,161 @@ protocol RecoverableError: Error {
 
 ---
 
+## 16. Implemented Core Services
+
+This section documents the actual implemented services in the codebase.
+
+### 16.1 LiDARScanningService
+
+Located at: `FigureScanner3D/Core/Services/LiDARScanningService.swift`
+
+```swift
+/// Service responsible for LiDAR-based 3D scanning
+@MainActor
+final class LiDARScanningService: NSObject, ObservableObject {
+
+    // Published Properties
+    @Published private(set) var isScanning = false
+    @Published private(set) var scanProgress: Float = 0.0
+    @Published private(set) var capturedMesh: CapturedMesh?
+    @Published private(set) var faceDetected = false
+    @Published private(set) var faceTransform: simd_float4x4?
+    @Published private(set) var lightingQuality: LightingQuality = .good
+    @Published private(set) var distanceToFace: Float = 0.0
+
+    // Key Features:
+    // - ARWorldTrackingConfiguration with sceneReconstruction = .meshWithClassification
+    // - Face tracking using ARFaceTrackingConfiguration.userFaceTrackingEnabled
+    // - Real-time mesh capture from ARMeshAnchor
+    // - Lighting quality estimation from ARFrame.lightEstimate
+    // - Distance calculation for optimal scanning range (25-50cm for face)
+    // - Progress tracking based on captured angles (5 angles for complete scan)
+}
+```
+
+**Key Methods:**
+- `configure(arView:mode:)` - Initialize AR session for face/body/bust scan
+- `startScanning()` - Begin mesh capture
+- `stopScanning()` - End capture and process mesh
+- `resetScan()` - Clear all captured data
+
+**Scan Modes:**
+- `.face` - Face scanning with 25-50cm optimal distance
+- `.body` - Full body 360° scanning
+- `.bust` - Head and shoulders scanning
+
+### 16.2 MeshProcessingService
+
+Located at: `FigureScanner3D/Core/Services/MeshProcessingService.swift`
+
+```swift
+/// Service for processing and optimizing captured 3D meshes
+actor MeshProcessingService {
+
+    struct ProcessingOptions {
+        var smoothingIterations: Int = 3
+        var smoothingFactor: Float = 0.5
+        var decimationRatio: Float = 0.5
+        var fillHoles: Bool = true
+        var removeNoise: Bool = true
+        var noiseThreshold: Float = 0.002  // 2mm
+    }
+
+    // Processing Pipeline:
+    // 1. Noise Removal - Remove outlier vertices
+    // 2. Hole Filling - Close small holes in mesh
+    // 3. Laplacian Smoothing - Smooth surface
+    // 4. Normal Recalculation - Update vertex normals
+    // 5. Decimation - Reduce vertex count if needed
+    // 6. UV Generation - Create texture coordinates
+}
+```
+
+**Processing Algorithms:**
+- **Noise Removal**: Adjacency-based outlier detection
+- **Hole Filling**: Boundary edge detection and fan triangulation
+- **Laplacian Smoothing**: Iterative vertex averaging with neighbors
+- **Decimation**: Vertex clustering with spatial grid
+
+### 16.3 MeshExportService
+
+Located at: `FigureScanner3D/Core/Services/MeshExportService.swift`
+
+```swift
+/// Service for exporting 3D meshes to various file formats
+actor MeshExportService {
+
+    enum ExportFormat: String, CaseIterable {
+        case stl = "STL"   // Binary/ASCII, most compatible
+        case obj = "OBJ"   // With texture coordinates and normals
+        case ply = "PLY"   // Binary/ASCII, with colors
+        case usdz = "USDZ" // Apple AR format (planned)
+    }
+
+    struct ExportOptions {
+        var scale: Float = 1.0
+        var centerMesh: Bool = true
+        var binary: Bool = true
+        var includeNormals: Bool = true
+        var includeTextureCoords: Bool = true
+    }
+}
+```
+
+**Supported Formats:**
+| Format | Binary | ASCII | Normals | Textures | Notes |
+|--------|--------|-------|---------|----------|-------|
+| STL | ✅ | ✅ | Face | ❌ | Best for 3D printing |
+| OBJ | ❌ | ✅ | ✅ | ✅ | Industry standard |
+| PLY | ✅ | ✅ | ✅ | ❌ | Good for point clouds |
+
+### 16.4 Data Models
+
+```swift
+/// Captured mesh from LiDAR scanning
+struct CapturedMesh {
+    let id: UUID
+    let vertices: [SIMD3<Float>]
+    let normals: [SIMD3<Float>]
+    let faces: [[Int]]
+    let scanMode: LiDARScanningService.ScanMode
+    let captureDate: Date
+
+    var vertexCount: Int
+    var faceCount: Int
+    var boundingBox: (min: SIMD3<Float>, max: SIMD3<Float>)
+    var dimensions: SIMD3<Float>
+}
+
+/// Processed mesh ready for export
+struct ProcessedMesh {
+    let vertices: [SIMD3<Float>]
+    let normals: [SIMD3<Float>]
+    let faces: [[Int]]
+    let textureCoordinates: [SIMD2<Float>]?
+}
+```
+
+### 16.5 Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| LiDARScanningService | ✅ Implemented | Face scan mode complete |
+| MeshProcessingService | ✅ Implemented | All algorithms working |
+| MeshExportService | ✅ Implemented | STL, OBJ, PLY formats |
+| FaceScanView | ✅ Implemented | Full UI with real-time feedback |
+| BodyScanView | 🔄 Placeholder | Needs LiDAR integration |
+| BustScanView | 🔄 Placeholder | Planned for v1.5 |
+| MeshPreviewView | 🔄 Basic | Needs 3D rendering |
+
+---
+
 ## Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | Dec 2024 | Engineering Team | Initial document |
+| 1.1 | Dec 2024 | Engineering Team | Added implemented services documentation |
 
 ---
 
