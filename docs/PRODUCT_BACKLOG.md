@@ -4,10 +4,10 @@
 
 | Priority | Items | Story Points |
 |----------|-------|--------------|
-| P0 - Critical | 8 | 47 |
-| P1 - High | 7 | 38 |
-| P2 - Medium | 5 | 25 |
-| P3 - Low | 3 | 12 |
+| P0 - Critical | 8 | 51 |
+| P1 - High | 8 | 35 |
+| P2 - Medium | 5 | 28 |
+| P3 - Low | 2 | 8 |
 | **Total** | **23** | **122** |
 
 ---

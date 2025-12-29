@@ -1,5 +1,19 @@
 # PRD: 3D Figure Scanner App
 
+**Version**: 1.0
+**Status**: Draft
+**Last Updated**: 2024-12-29
+
+---
+
+## Document History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | 2024-12-29 | Product Team | Initial PRD creation |
+
+---
+
 ## 1. Tổng quan sản phẩm
 
 ### 1.1 Mô tả
