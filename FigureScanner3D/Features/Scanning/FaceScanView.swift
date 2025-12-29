@@ -212,11 +212,25 @@ struct FaceScanView: View {
     // MARK: - Processing Overlay
     private var processingOverlay: some View {
         VStack(spacing: 20) {
-            ProgressView()
-                .scaleEffect(2)
-                .tint(.white)
+            // Circular progress
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.3), lineWidth: 8)
+                    .frame(width: 80, height: 80)
 
-            Text("Processing mesh...")
+                Circle()
+                    .trim(from: 0, to: CGFloat(viewModel.processingProgress))
+                    .stroke(Color.green, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .frame(width: 80, height: 80)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.processingProgress)
+
+                Text("\(Int(viewModel.processingProgress * 100))%")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+
+            Text(viewModel.processingStep.isEmpty ? "Processing mesh..." : viewModel.processingStep)
                 .font(.headline)
                 .foregroundColor(.white)
 
@@ -472,6 +486,8 @@ class FaceScanViewModel: ObservableObject {
     @Published var exportedFileURL: URL?
     @Published var processedMesh: MeshProcessingService.ProcessedMesh?
     @Published var savedScan: Scan3DModel?
+    @Published var processingStep: String = ""
+    @Published var processingProgress: Float = 0.0
 
     // MARK: - Services
     let scanningService = LiDARScanningService()
@@ -604,6 +620,8 @@ class FaceScanViewModel: ObservableObject {
     func stopScan() {
         scanState = .processing
         scanningService.stopScanning()
+        processingStep = "Preparing..."
+        processingProgress = 0.0
 
         // Process and save the mesh
         Task {
@@ -614,8 +632,16 @@ class FaceScanViewModel: ObservableObject {
                     return
                 }
 
-                // Process the mesh
-                processedMesh = try await processingService.process(mesh)
+                // Process the mesh with progress reporting
+                processedMesh = try await processingService.process(
+                    mesh,
+                    options: MeshProcessingService.ProcessingOptions()
+                ) { [weak self] step, progress in
+                    Task { @MainActor in
+                        self?.processingStep = step.rawValue
+                        self?.processingProgress = progress
+                    }
+                }
 
                 // Create scan model
                 let dateFormatter = DateFormatter()

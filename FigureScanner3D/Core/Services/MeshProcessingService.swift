@@ -5,6 +5,34 @@ import simd
 /// Service for processing and optimizing captured 3D meshes
 actor MeshProcessingService {
 
+    // MARK: - Processing Step (for progress reporting)
+    enum ProcessingStep: String, CaseIterable {
+        case preparingData = "Preparing data..."
+        case removingNoise = "Removing noise..."
+        case fillingHoles = "Filling holes..."
+        case smoothing = "Smoothing surface..."
+        case calculatingNormals = "Calculating normals..."
+        case decimating = "Optimizing mesh..."
+        case generatingTexCoords = "Generating texture coordinates..."
+        case finalizing = "Finalizing..."
+
+        var progress: Float {
+            switch self {
+            case .preparingData: return 0.0
+            case .removingNoise: return 0.15
+            case .fillingHoles: return 0.30
+            case .smoothing: return 0.45
+            case .calculatingNormals: return 0.70
+            case .decimating: return 0.80
+            case .generatingTexCoords: return 0.90
+            case .finalizing: return 0.95
+            }
+        }
+    }
+
+    // MARK: - Progress Callback
+    typealias ProgressCallback = @Sendable (ProcessingStep, Float) -> Void
+
     // MARK: - Processing Options
     struct ProcessingOptions {
         var smoothingIterations: Int = 3
@@ -64,15 +92,27 @@ actor MeshProcessingService {
 
     /// Process a captured mesh with default options
     func process(_ mesh: CapturedMesh) async throws -> ProcessedMesh {
-        try await process(mesh, options: ProcessingOptions())
+        try await process(mesh, options: ProcessingOptions(), progress: nil)
     }
 
     /// Process a captured mesh with custom options
     func process(_ mesh: CapturedMesh, options: ProcessingOptions) async throws -> ProcessedMesh {
+        try await process(mesh, options: options, progress: nil)
+    }
+
+    /// Process a captured mesh with progress reporting
+    func process(
+        _ mesh: CapturedMesh,
+        options: ProcessingOptions,
+        progress: ProgressCallback?
+    ) async throws -> ProcessedMesh {
         var vertices = mesh.vertices
         var normals = mesh.normals
         var faces = mesh.faces
         var textureCoords = mesh.textureCoordinates
+
+        // Report initial progress
+        progress?(.preparingData, ProcessingStep.preparingData.progress)
 
         // Build vertex index mapping for texture coordinate updates
         var vertexMap: [Int: Int] = [:]
@@ -82,6 +122,8 @@ actor MeshProcessingService {
 
         // Step 1: Remove noise
         if options.removeNoise {
+            progress?(.removingNoise, ProcessingStep.removingNoise.progress)
+
             let (newVertices, newNormals, newFaces, newMap) = removeNoiseWithMapping(
                 vertices: vertices,
                 normals: normals,
@@ -102,6 +144,8 @@ actor MeshProcessingService {
 
         // Step 2: Fill holes
         if options.fillHoles {
+            progress?(.fillingHoles, ProcessingStep.fillingHoles.progress)
+
             (vertices, normals, faces) = fillHoles(
                 vertices: vertices,
                 normals: normals,
@@ -111,6 +155,8 @@ actor MeshProcessingService {
 
         // Step 3: Smooth mesh
         if options.smoothingIterations > 0 {
+            progress?(.smoothing, ProcessingStep.smoothing.progress)
+
             vertices = laplacianSmooth(
                 vertices: vertices,
                 faces: faces,
@@ -120,10 +166,13 @@ actor MeshProcessingService {
         }
 
         // Step 4: Recalculate normals
+        progress?(.calculatingNormals, ProcessingStep.calculatingNormals.progress)
         normals = recalculateNormals(vertices: vertices, faces: faces)
 
         // Step 5: Decimate if needed
         if options.decimationRatio < 1.0 {
+            progress?(.decimating, ProcessingStep.decimating.progress)
+
             (vertices, normals, faces) = decimate(
                 vertices: vertices,
                 normals: normals,
@@ -136,8 +185,11 @@ actor MeshProcessingService {
 
         // Step 6: Generate texture coordinates if not present
         if textureCoords == nil || textureCoords?.count != vertices.count {
+            progress?(.generatingTexCoords, ProcessingStep.generatingTexCoords.progress)
             textureCoords = generateTextureCoordinates(vertices: vertices)
         }
+
+        progress?(.finalizing, ProcessingStep.finalizing.progress)
 
         return ProcessedMesh(
             vertices: vertices,
