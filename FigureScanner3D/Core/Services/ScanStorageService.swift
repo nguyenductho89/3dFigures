@@ -282,6 +282,12 @@ actor ScanStorageService {
     }
 
     private func deserializeMesh(_ data: Data) throws -> CapturedMesh {
+        // Validate minimum header size (4 + 4 + 4 + 1 = 13 bytes)
+        let headerSize = 13
+        guard data.count >= headerSize else {
+            throw StorageError.invalidData
+        }
+
         var offset = 0
 
         // Read header
@@ -294,28 +300,63 @@ actor ScanStorageService {
         let hasTexCoords = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt8.self) }
         offset += 1
 
-        // Read vertices
+        // Validate data size before reading
+        // Each vertex: 12 bytes (SIMD3<Float>), Each normal: 12 bytes
+        // Faces: variable (1 byte count + 4 bytes per index)
+        // Texture coords: 8 bytes each (SIMD2<Float>)
+        let vertexDataSize = Int(vertexCount) * MemoryLayout<SIMD3<Float>>.size
+        let normalDataSize = Int(normalCount) * MemoryLayout<SIMD3<Float>>.size
+        let minExpectedSize = headerSize + vertexDataSize + normalDataSize
+
+        guard data.count >= minExpectedSize else {
+            throw StorageError.invalidData
+        }
+
+        // Validate counts are reasonable (prevent memory issues)
+        let maxVertices: UInt32 = 10_000_000
+        guard vertexCount <= maxVertices && normalCount <= maxVertices && faceCount <= maxVertices else {
+            throw StorageError.invalidData
+        }
+
+        // Read vertices with bounds checking
         var vertices: [SIMD3<Float>] = []
+        vertices.reserveCapacity(Int(vertexCount))
         for _ in 0..<vertexCount {
+            guard offset + MemoryLayout<SIMD3<Float>>.size <= data.count else {
+                throw StorageError.invalidData
+            }
             let vertex = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: SIMD3<Float>.self) }
             vertices.append(vertex)
             offset += MemoryLayout<SIMD3<Float>>.size
         }
 
-        // Read normals
+        // Read normals with bounds checking
         var normals: [SIMD3<Float>] = []
+        normals.reserveCapacity(Int(normalCount))
         for _ in 0..<normalCount {
+            guard offset + MemoryLayout<SIMD3<Float>>.size <= data.count else {
+                throw StorageError.invalidData
+            }
             let normal = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: SIMD3<Float>.self) }
             normals.append(normal)
             offset += MemoryLayout<SIMD3<Float>>.size
         }
 
-        // Read faces
+        // Read faces with bounds checking
         var faces: [[Int]] = []
+        faces.reserveCapacity(Int(faceCount))
         for _ in 0..<faceCount {
+            guard offset + 1 <= data.count else {
+                throw StorageError.invalidData
+            }
             let count = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt8.self) }
             offset += 1
+
+            guard offset + Int(count) * 4 <= data.count else {
+                throw StorageError.invalidData
+            }
             var indices: [Int] = []
+            indices.reserveCapacity(Int(count))
             for _ in 0..<count {
                 let index = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: UInt32.self) }
                 indices.append(Int(index))
@@ -324,10 +365,15 @@ actor ScanStorageService {
             faces.append(indices)
         }
 
-        // Read texture coordinates
+        // Read texture coordinates with bounds checking
         var texCoords: [SIMD2<Float>]? = nil
         if hasTexCoords == 1 {
+            let texCoordsSize = Int(vertexCount) * MemoryLayout<SIMD2<Float>>.size
+            guard offset + texCoordsSize <= data.count else {
+                throw StorageError.invalidData
+            }
             texCoords = []
+            texCoords?.reserveCapacity(Int(vertexCount))
             for _ in 0..<vertexCount {
                 let coord = data.withUnsafeBytes { $0.load(fromByteOffset: offset, as: SIMD2<Float>.self) }
                 texCoords?.append(coord)
