@@ -1,4 +1,5 @@
 import SwiftUI
+import ARKit
 
 @main
 struct FigureScanner3DApp: App {
@@ -23,12 +24,8 @@ class AppState: ObservableObject {
     }
 
     private func checkDeviceCapabilities() {
-        // Check for LiDAR support
-        if #available(iOS 16.0, *) {
-            // ARWorldTrackingConfiguration.supportsSceneReconstruction will be checked
-            // when ARKit is properly imported
-            hasLiDAR = true // Placeholder - will be replaced with actual check
-            isDeviceSupported = true
-        }
+        // Check for LiDAR support using ARKit
+        hasLiDAR = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+        isDeviceSupported = hasLiDAR
     }
 }
