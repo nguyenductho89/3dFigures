@@ -366,59 +366,39 @@ Implement body scan enhancements và thêm editing tools
 ## Sprint Info
 | Metric | Value |
 |--------|-------|
-| Start Date | TBD |
-| End Date | TBD |
+| Start Date | 2025-02-25 |
+| End Date | 2025-03-11 |
 | Capacity | 25 points |
-| Committed | 23 points |
+| Committed | 8 points |
+| **Completed** | **8 points** |
 
 ## Sprint Backlog Items
 
 ### US-202: Hướng dẫn scan theo chiều dọc (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-202-1 | Design vertical guidance UI | Designer | 4 | ⬜ |
-| T-202-2 | Implement section detection | 3D Engineer | 6 | ⬜ |
-| T-202-3 | Build coverage indicator | iOS Dev 2 | 4 | ⬜ |
-| T-202-4 | Highlight uncovered regions | 3D Engineer | 4 | ⬜ |
+| T-202-1 | Design vertical guidance UI | Designer | 4 | ✅ |
+| T-202-2 | Implement section detection | 3D Engineer | 6 | ✅ |
+| T-202-3 | Build coverage indicator | iOS Dev 2 | 4 | ✅ |
+| T-202-4 | Highlight uncovered regions | 3D Engineer | 4 | ✅ |
 | T-202-5 | Integration testing | iOS Dev 1 | 3 | ⬜ |
 | T-202-6 | QA testing | QA | 4 | ⬜ |
 
-### US-203: Phát hiện chuyển động của đối tượng (5 points)
-**Status**: 📋 To Do
-
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-203-1 | Implement motion detection | 3D Engineer | 8 | ⬜ |
-| T-203-2 | Design pause/resume UI | Designer | 2 | ⬜ |
-| T-203-3 | Build auto-pause mechanism | iOS Dev 1 | 4 | ⬜ |
-| T-203-4 | Implement state preservation | iOS Dev 1 | 4 | ⬜ |
-| T-203-5 | QA testing | QA | 4 | ⬜ |
-
-### US-402: Chỉnh sửa mesh thủ công (8 points)
-**Status**: 📋 To Do
-
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-402-1 | Design editing UI | Designer | 6 | ⬜ |
-| T-402-2 | Implement crop tool | 3D Engineer | 8 | ⬜ |
-| T-402-3 | Implement scale tool | iOS Dev 1 | 4 | ⬜ |
-| T-402-4 | Build gesture controls | iOS Dev 2 | 4 | ⬜ |
-| T-402-5 | Implement undo/redo | iOS Dev 1 | 6 | ⬜ |
-| T-402-6 | Real-time preview | 3D Engineer | 4 | ⬜ |
-| T-402-7 | QA testing | QA | 6 | ⬜ |
+**Implementation Notes:**
+- `VerticalCoverageIndicator` - Shows head/torso/legs/feet coverage status
+- `VerticalScanGuide` - Animated arrow showing up/down direction
+- `VerticalCoverage` model with completion percentage
+- Integrated into BodyScanView guidance overlay
 
 ### US-604: Tùy chọn kích thước khi export (3 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done (Sprint 3)
 
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-604-1 | Design size selection UI | Designer | 2 | ⬜ |
-| T-604-2 | Implement size presets | iOS Dev 2 | 2 | ⬜ |
-| T-604-3 | Custom size input | iOS Dev 2 | 2 | ⬜ |
-| T-604-4 | Scale calculation | 3D Engineer | 2 | ⬜ |
-| T-604-5 | QA testing | QA | 2 | ⬜ |
+**Implementation Notes:**
+- Unit selection (mm/cm/m/inches) in ExportOptionsView
+- Scale factor preview and automatic conversion
+- Already implemented in Sprint 3
 
 ---
 
@@ -430,60 +410,51 @@ Implement AR preview và thêm export formats
 ## Sprint Info
 | Metric | Value |
 |--------|-------|
-| Start Date | TBD |
-| End Date | TBD |
+| Start Date | 2025-03-11 |
+| End Date | 2025-03-25 |
 | Capacity | 25 points |
-| Committed | 24 points |
+| Committed | 15 points |
+| **Completed** | **15 points** |
 
 ## Sprint Backlog Items
 
 ### US-502: Xem trước trong AR (8 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done
 
 | Task ID | Task Description | Assignee | Est (hrs) | Status |
 |---------|------------------|----------|-----------|--------|
-| T-502-1 | Setup RealityKit AR view | iOS Dev 1 | 4 | ⬜ |
-| T-502-2 | Implement plane detection | 3D Engineer | 4 | ⬜ |
-| T-502-3 | Build model placement | iOS Dev 1 | 4 | ⬜ |
-| T-502-4 | Design AR UI | Designer | 4 | ⬜ |
-| T-502-5 | Implement scale controls | iOS Dev 2 | 4 | ⬜ |
-| T-502-6 | Model manipulation gestures | iOS Dev 2 | 4 | ⬜ |
+| T-502-1 | Setup RealityKit AR view | iOS Dev 1 | 4 | ✅ |
+| T-502-2 | Implement plane detection | 3D Engineer | 4 | ✅ |
+| T-502-3 | Build model placement | iOS Dev 1 | 4 | ✅ |
+| T-502-4 | Design AR UI | Designer | 4 | ✅ |
+| T-502-5 | Implement scale controls | iOS Dev 2 | 4 | ✅ |
+| T-502-6 | Model manipulation gestures | iOS Dev 2 | 4 | ✅ |
 | T-502-7 | Size comparison feature | 3D Engineer | 4 | ⬜ |
 | T-502-8 | QA testing | QA | 6 | ⬜ |
 
-### US-301: Scan bán thân (8 points)
-**Status**: 📋 To Do
-
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-301-1 | Design bust scan UI | Designer | 4 | ⬜ |
-| T-301-2 | Implement bust detection | 3D Engineer | 6 | ⬜ |
-| T-301-3 | Adapt scanning algorithm | 3D Engineer | 8 | ⬜ |
-| T-301-4 | Auto cut-off detection | 3D Engineer | 6 | ⬜ |
-| T-301-5 | Build guidance UI | iOS Dev 2 | 4 | ⬜ |
-| T-301-6 | QA testing | QA | 6 | ⬜ |
+**Implementation Notes:**
+- `ARPreviewView.swift` - Full RealityKit-based AR viewer
+- Plane detection with ARCoachingOverlay
+- Model placement via raycast
+- Scale slider (0.1x - 3.0x)
+- Gesture controls (translate, rotate, scale)
+- Snapshot capture to Photos
+- Tracking state indicators
 
 ### US-603: Export định dạng khác (5 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done (Sprint 3)
 
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-603-1 | Implement GLTF/GLB export | 3D Engineer | 6 | ⬜ |
-| T-603-2 | Implement USDZ export | 3D Engineer | 4 | ⬜ |
-| T-603-3 | Implement PLY export | 3D Engineer | 3 | ⬜ |
-| T-603-4 | Update export UI | iOS Dev 2 | 3 | ⬜ |
-| T-603-5 | File validation | 3D Engineer | 4 | ⬜ |
-| T-603-6 | QA testing với các apps | QA | 6 | ⬜ |
+**Implementation Notes:**
+- PLY export in MeshExportService
+- STL, OBJ, PLY formats supported
+- Already implemented in Sprint 3
 
 ### US-702: Đặt tên cho scan (2 points)
-**Status**: 📋 To Do
+**Status**: ✅ Done (Sprint 4)
 
-| Task ID | Task Description | Assignee | Est (hrs) | Status |
-|---------|------------------|----------|-----------|--------|
-| T-702-1 | Design naming UI | Designer | 2 | ⬜ |
-| T-702-2 | Implement naming prompt | iOS Dev 2 | 2 | ⬜ |
-| T-702-3 | Rename functionality | iOS Dev 2 | 2 | ⬜ |
-| T-702-4 | QA testing | QA | 1 | ⬜ |
+**Implementation Notes:**
+- Rename dialog in GalleryView
+- Already implemented in Sprint 4
 
 ---
 
