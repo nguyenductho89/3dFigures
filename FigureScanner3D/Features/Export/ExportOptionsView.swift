@@ -14,7 +14,7 @@ struct ExportOptionsView: View {
                 // Format Selection
                 Section("Export Format") {
                     Picker("Format", selection: $viewModel.selectedFormat) {
-                        ForEach(MeshExportService.ExportFormat.allCases, id: \.self) { format in
+                        ForEach(MeshExportService.ExportFormat.supportedFormats, id: \.self) { format in
                             HStack {
                                 Image(systemName: format.icon)
                                 Text(format.displayName)

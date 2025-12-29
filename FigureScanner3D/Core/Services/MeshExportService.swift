@@ -15,6 +15,11 @@ actor MeshExportService {
         case ply = "PLY"
         case usdz = "USDZ"
 
+        /// Formats that are currently implemented and supported for export
+        static var supportedFormats: [ExportFormat] {
+            [.stl, .obj, .ply]  // USDZ requires SceneKit/RealityKit integration (not yet implemented)
+        }
+
         var fileExtension: String {
             rawValue.lowercased()
         }
@@ -35,6 +40,10 @@ actor MeshExportService {
             case .ply: return UTType(filenameExtension: "ply") ?? .data
             case .usdz: return .usdz
             }
+        }
+
+        var isSupported: Bool {
+            Self.supportedFormats.contains(self)
         }
     }
 
