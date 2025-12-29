@@ -28,6 +28,38 @@ actor MeshProcessingService {
         var hasTexture: Bool { textureData != nil && textureCoordinates != nil }
     }
 
+    // MARK: - Mesh Topology (cached for performance)
+    /// Precomputed mesh topology to avoid rebuilding adjacency lists
+    private struct MeshTopology {
+        let adjacency: [[Int]]
+        let boundaryEdges: Set<String>
+
+        init(faces: [[Int]], vertexCount: Int) {
+            var adj: [[Int]] = Array(repeating: [], count: vertexCount)
+            var edgeCount: [String: Int] = [:]
+
+            for face in faces {
+                for i in 0..<3 {
+                    let v1 = face[i]
+                    let v2 = face[(i + 1) % 3]
+
+                    // Build adjacency (avoid duplicates)
+                    if v1 < vertexCount && v2 < vertexCount {
+                        if !adj[v1].contains(v2) { adj[v1].append(v2) }
+                        if !adj[v2].contains(v1) { adj[v2].append(v1) }
+                    }
+
+                    // Count edges for boundary detection
+                    let key = v1 < v2 ? "\(v1)-\(v2)" : "\(v2)-\(v1)"
+                    edgeCount[key, default: 0] += 1
+                }
+            }
+
+            self.adjacency = adj
+            self.boundaryEdges = Set(edgeCount.filter { $0.value == 1 }.keys)
+        }
+    }
+
     // MARK: - Public Methods
 
     /// Process a captured mesh with default options
@@ -123,35 +155,42 @@ actor MeshProcessingService {
         faces: [[Int]],
         threshold: Float
     ) -> ([SIMD3<Float>], [SIMD3<Float>], [[Int]], [Int: Int]) {
-        // Build adjacency list
-        var adjacency: [[Int]] = Array(repeating: [], count: vertices.count)
-        for face in faces {
-            for i in 0..<3 {
-                let v1 = face[i]
-                let v2 = face[(i + 1) % 3]
-                if !adjacency[v1].contains(v2) {
-                    adjacency[v1].append(v2)
+        // Build topology once (reused structure)
+        let topology = MeshTopology(faces: faces, vertexCount: vertices.count)
+
+        // Find outlier vertices using parallel processing for large meshes
+        var validFlags = [Bool](repeating: false, count: vertices.count)
+        let thresholdMultiplied = threshold * 10
+
+        if vertices.count > 1000 {
+            // Parallel processing for large meshes
+            DispatchQueue.concurrentPerform(iterations: vertices.count) { i in
+                let neighbors = topology.adjacency[i]
+                guard !neighbors.isEmpty else { return }
+
+                var totalDistance: Float = 0
+                for neighbor in neighbors {
+                    totalDistance += length(vertices[i] - vertices[neighbor])
                 }
-                if !adjacency[v2].contains(v1) {
-                    adjacency[v2].append(v1)
+                let avgDistance = totalDistance / Float(neighbors.count)
+
+                if avgDistance < thresholdMultiplied {
+                    validFlags[i] = true
                 }
             }
-        }
+        } else {
+            // Sequential for small meshes (avoid overhead)
+            for i in 0..<vertices.count {
+                let neighbors = topology.adjacency[i]
+                guard !neighbors.isEmpty else { continue }
 
-        // Find outlier vertices
-        var validVertices = Set<Int>()
-        for i in 0..<vertices.count {
-            let neighbors = adjacency[i]
-            if neighbors.isEmpty {
-                continue
-            }
+                let avgDistance = neighbors.reduce(Float(0)) { sum, neighbor in
+                    sum + length(vertices[i] - vertices[neighbor])
+                } / Float(neighbors.count)
 
-            let avgDistance = neighbors.reduce(Float(0)) { sum, neighbor in
-                sum + length(vertices[i] - vertices[neighbor])
-            } / Float(neighbors.count)
-
-            if avgDistance < threshold * 10 {
-                validVertices.insert(i)
+                if avgDistance < thresholdMultiplied {
+                    validFlags[i] = true
+                }
             }
         }
 
@@ -159,8 +198,10 @@ actor MeshProcessingService {
         var newVertices: [SIMD3<Float>] = []
         var newNormals: [SIMD3<Float>] = []
         var vertexMap: [Int: Int] = [:]
+        newVertices.reserveCapacity(vertices.count)
+        newNormals.reserveCapacity(normals.count)
 
-        for (oldIndex, _) in vertices.enumerated() where validVertices.contains(oldIndex) {
+        for oldIndex in 0..<vertices.count where validFlags[oldIndex] {
             vertexMap[oldIndex] = newVertices.count
             newVertices.append(vertices[oldIndex])
             if oldIndex < normals.count {
@@ -170,6 +211,7 @@ actor MeshProcessingService {
 
         // Remap faces
         var newFaces: [[Int]] = []
+        newFaces.reserveCapacity(faces.count)
         for face in faces {
             if let v0 = vertexMap[face[0]],
                let v1 = vertexMap[face[1]],
@@ -179,72 +221,6 @@ actor MeshProcessingService {
         }
 
         return (newVertices, newNormals, newFaces, vertexMap)
-    }
-
-    // MARK: - Noise Removal
-
-    private func removeNoise(
-        vertices: [SIMD3<Float>],
-        normals: [SIMD3<Float>],
-        faces: [[Int]],
-        threshold: Float
-    ) -> ([SIMD3<Float>], [SIMD3<Float>], [[Int]]) {
-        // Build adjacency list
-        var adjacency: [[Int]] = Array(repeating: [], count: vertices.count)
-        for face in faces {
-            for i in 0..<3 {
-                let v1 = face[i]
-                let v2 = face[(i + 1) % 3]
-                if !adjacency[v1].contains(v2) {
-                    adjacency[v1].append(v2)
-                }
-                if !adjacency[v2].contains(v1) {
-                    adjacency[v2].append(v1)
-                }
-            }
-        }
-
-        // Find outlier vertices (those with neighbors too far away)
-        var validVertices = Set<Int>()
-        for i in 0..<vertices.count {
-            let neighbors = adjacency[i]
-            if neighbors.isEmpty {
-                continue
-            }
-
-            let avgDistance = neighbors.reduce(Float(0)) { sum, neighbor in
-                sum + length(vertices[i] - vertices[neighbor])
-            } / Float(neighbors.count)
-
-            if avgDistance < threshold * 10 {  // Allow 10x threshold for connectivity
-                validVertices.insert(i)
-            }
-        }
-
-        // Remap vertices and faces
-        var newVertices: [SIMD3<Float>] = []
-        var newNormals: [SIMD3<Float>] = []
-        var vertexMap: [Int: Int] = [:]
-
-        for (oldIndex, _) in vertices.enumerated() where validVertices.contains(oldIndex) {
-            vertexMap[oldIndex] = newVertices.count
-            newVertices.append(vertices[oldIndex])
-            if oldIndex < normals.count {
-                newNormals.append(normals[oldIndex])
-            }
-        }
-
-        // Remap faces
-        var newFaces: [[Int]] = []
-        for face in faces {
-            if let v0 = vertexMap[face[0]],
-               let v1 = vertexMap[face[1]],
-               let v2 = vertexMap[face[2]] {
-                newFaces.append([v0, v1, v2])
-            }
-        }
-
-        return (newVertices, newNormals, newFaces)
     }
 
     // MARK: - Hole Filling
@@ -321,37 +297,47 @@ actor MeshProcessingService {
     ) -> [SIMD3<Float>] {
         var smoothedVertices = vertices
 
-        // Build adjacency list
-        var adjacency: [[Int]] = Array(repeating: [], count: vertices.count)
-        for face in faces {
-            for i in 0..<3 {
-                let v1 = face[i]
-                let v2 = face[(i + 1) % 3]
-                if !adjacency[v1].contains(v2) {
-                    adjacency[v1].append(v2)
-                }
-                if !adjacency[v2].contains(v1) {
-                    adjacency[v2].append(v1)
-                }
-            }
-        }
+        // Build topology once and reuse for all iterations
+        let topology = MeshTopology(faces: faces, vertexCount: vertices.count)
+        let adjacency = topology.adjacency
+        let useParallel = vertices.count > 1000
+        let oneMinusFactor = 1 - factor
 
         for _ in 0..<iterations {
             var newPositions = smoothedVertices
 
-            for i in 0..<smoothedVertices.count {
-                let neighbors = adjacency[i]
-                if neighbors.isEmpty { continue }
+            if useParallel {
+                // Parallel smoothing for large meshes
+                DispatchQueue.concurrentPerform(iterations: smoothedVertices.count) { i in
+                    let neighbors = adjacency[i]
+                    guard !neighbors.isEmpty else { return }
 
-                // Calculate centroid of neighbors
-                var centroid = SIMD3<Float>(0, 0, 0)
-                for neighbor in neighbors {
-                    centroid += smoothedVertices[neighbor]
+                    // Calculate centroid of neighbors
+                    var centroid = SIMD3<Float>(0, 0, 0)
+                    for neighbor in neighbors {
+                        centroid += smoothedVertices[neighbor]
+                    }
+                    centroid /= Float(neighbors.count)
+
+                    // Move vertex towards centroid
+                    newPositions[i] = smoothedVertices[i] * oneMinusFactor + centroid * factor
                 }
-                centroid /= Float(neighbors.count)
+            } else {
+                // Sequential for small meshes
+                for i in 0..<smoothedVertices.count {
+                    let neighbors = adjacency[i]
+                    guard !neighbors.isEmpty else { continue }
 
-                // Move vertex towards centroid
-                newPositions[i] = mix(smoothedVertices[i], centroid, t: factor)
+                    // Calculate centroid of neighbors
+                    var centroid = SIMD3<Float>(0, 0, 0)
+                    for neighbor in neighbors {
+                        centroid += smoothedVertices[neighbor]
+                    }
+                    centroid /= Float(neighbors.count)
+
+                    // Move vertex towards centroid
+                    newPositions[i] = smoothedVertices[i] * oneMinusFactor + centroid * factor
+                }
             }
 
             smoothedVertices = newPositions
@@ -368,8 +354,12 @@ actor MeshProcessingService {
     ) -> [SIMD3<Float>] {
         var normals = [SIMD3<Float>](repeating: SIMD3<Float>(0, 0, 0), count: vertices.count)
 
+        // Accumulate face normals to vertices (sequential due to write dependencies)
         for face in faces {
-            guard face.count >= 3 else { continue }
+            guard face.count >= 3,
+                  face[0] < vertices.count,
+                  face[1] < vertices.count,
+                  face[2] < vertices.count else { continue }
 
             let v0 = vertices[face[0]]
             let v1 = vertices[face[1]]
@@ -385,11 +375,20 @@ actor MeshProcessingService {
             }
         }
 
-        // Normalize
-        for i in 0..<normals.count {
-            let length = simd_length(normals[i])
-            if length > 0 {
-                normals[i] /= length
+        // Normalize (parallel for large meshes)
+        if normals.count > 1000 {
+            DispatchQueue.concurrentPerform(iterations: normals.count) { i in
+                let len = simd_length(normals[i])
+                if len > 0 {
+                    normals[i] /= len
+                }
+            }
+        } else {
+            for i in 0..<normals.count {
+                let len = simd_length(normals[i])
+                if len > 0 {
+                    normals[i] /= len
+                }
             }
         }
 
