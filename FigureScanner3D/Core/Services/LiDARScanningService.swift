@@ -5,6 +5,89 @@ import Combine
 import CoreImage
 import VideoToolbox
 
+// MARK: - Scan Configuration
+
+/// Configuration parameters for 3D scanning operations.
+///
+/// Use predefined configurations or create custom ones to control scan behavior:
+/// - `default`: Standard scanning with balanced quality and performance
+/// - `highQuality`: Higher resolution scanning with more captured frames
+/// - `quickScan`: Faster scanning with lower quality settings
+struct ScanConfiguration {
+    /// Number of angles required for a complete scan
+    let requiredAngles: Int
+
+    /// Interval between texture frame captures (in seconds)
+    let textureCaptureInterval: TimeInterval
+
+    /// Maximum number of texture frames to capture
+    let maxTextureFrames: Int
+
+    /// Bounding box for face scanning region
+    let faceScanBounds: BoundingBox
+
+    /// Lighting threshold levels for quality indicators
+    let lightingThresholds: LightingThresholds
+
+    /// Mesh density target for progress calculation
+    let meshDensityTarget: Int
+
+    /// Angle bucket size for quantization (in degrees)
+    let angleBucketSize: Int
+
+    struct LightingThresholds {
+        let poor: Double
+        let fair: Double
+        let good: Double
+
+        static let `default` = LightingThresholds(poor: 200, fair: 500, good: 1000)
+    }
+
+    // MARK: - Predefined Configurations
+
+    /// Default scanning configuration with balanced settings
+    static let `default` = ScanConfiguration(
+        requiredAngles: 5,
+        textureCaptureInterval: 0.2,
+        maxTextureFrames: 30,
+        faceScanBounds: BoundingBox(
+            min: SIMD3<Float>(-0.15, -0.20, -0.15),
+            max: SIMD3<Float>(0.15, 0.15, 0.10)
+        ),
+        lightingThresholds: .default,
+        meshDensityTarget: 10,
+        angleBucketSize: 36
+    )
+
+    /// High quality scanning configuration for detailed captures
+    static let highQuality = ScanConfiguration(
+        requiredAngles: 8,
+        textureCaptureInterval: 0.1,
+        maxTextureFrames: 60,
+        faceScanBounds: BoundingBox(
+            min: SIMD3<Float>(-0.18, -0.25, -0.18),
+            max: SIMD3<Float>(0.18, 0.18, 0.12)
+        ),
+        lightingThresholds: .default,
+        meshDensityTarget: 15,
+        angleBucketSize: 30
+    )
+
+    /// Quick scan configuration for faster captures
+    static let quickScan = ScanConfiguration(
+        requiredAngles: 3,
+        textureCaptureInterval: 0.3,
+        maxTextureFrames: 15,
+        faceScanBounds: BoundingBox(
+            min: SIMD3<Float>(-0.12, -0.18, -0.12),
+            max: SIMD3<Float>(0.12, 0.12, 0.08)
+        ),
+        lightingThresholds: .default,
+        meshDensityTarget: 8,
+        angleBucketSize: 45
+    )
+}
+
 /// Service responsible for LiDAR-based 3D scanning
 @MainActor
 final class LiDARScanningService: NSObject, ObservableObject {
@@ -39,6 +122,9 @@ final class LiDARScanningService: NSObject, ObservableObject {
         case bust
     }
 
+    // MARK: - Configuration
+    private var configuration: ScanConfiguration
+
     // MARK: - Private Properties
     private var arView: ARView?
     private var scanMode: ScanMode = .face
@@ -46,19 +132,19 @@ final class LiDARScanningService: NSObject, ObservableObject {
     private var faceAnchor: ARFaceAnchor?
     private var scanStartTime: Date?
     private var capturedAngles: Set<Int> = []
-    private let requiredAngles = 5 // Number of angles needed for complete scan
 
     // Texture capture properties
     private var capturedTextureFrames: [CapturedTextureFrame] = []
     private var lastTextureCapture: Date = .distantPast
-    private let textureCaptureInterval: TimeInterval = 0.2 // Capture every 200ms
-    private let maxTextureFrames = 30 // Max frames to capture
 
-    // Scanning bounds for face
-    private let faceScanBounds = BoundingBox(
-        min: SIMD3<Float>(-0.15, -0.20, -0.15),
-        max: SIMD3<Float>(0.15, 0.15, 0.10)
-    )
+    // MARK: - Initialization
+
+    /// Creates a new scanning service with the specified configuration
+    /// - Parameter configuration: Scan configuration parameters (defaults to `.default`)
+    init(configuration: ScanConfiguration = .default) {
+        self.configuration = configuration
+        super.init()
+    }
 
     // MARK: - Device Capability Check
     static var isLiDARAvailable: Bool {
@@ -70,6 +156,17 @@ final class LiDARScanningService: NSObject, ObservableObject {
     }
 
     // MARK: - Public Methods
+
+    /// Updates the scan configuration
+    /// - Parameter configuration: New configuration to use
+    func updateConfiguration(_ configuration: ScanConfiguration) {
+        self.configuration = configuration
+    }
+
+    /// Current scan configuration
+    var currentConfiguration: ScanConfiguration {
+        configuration
+    }
 
     func configure(arView: ARView, mode: ScanMode) {
         self.arView = arView
@@ -199,7 +296,7 @@ final class LiDARScanningService: NSObject, ObservableObject {
                         let faceInverse = faceTransform.inverse
                         let localVertex = faceInverse * worldVertex
 
-                        if faceScanBounds.contains(SIMD3<Float>(localVertex.x, localVertex.y, localVertex.z)) {
+                        if configuration.faceScanBounds.contains(SIMD3<Float>(localVertex.x, localVertex.y, localVertex.z)) {
                             allVertices.append(SIMD3<Float>(worldVertex.x, worldVertex.y, worldVertex.z))
                         }
                     }
@@ -292,13 +389,14 @@ final class LiDARScanningService: NSObject, ObservableObject {
         }
 
         let ambientIntensity = lightEstimate.ambientIntensity
+        let thresholds = configuration.lightingThresholds
 
         switch ambientIntensity {
-        case 0..<200:
+        case 0..<thresholds.poor:
             lightingQuality = .poor
-        case 200..<500:
+        case thresholds.poor..<thresholds.fair:
             lightingQuality = .fair
-        case 500..<1000:
+        case thresholds.fair..<thresholds.good:
             lightingQuality = .good
         default:
             lightingQuality = .excellent
@@ -307,10 +405,10 @@ final class LiDARScanningService: NSObject, ObservableObject {
 
     private func updateScanProgress() {
         // Calculate progress based on captured angles
-        let angleProgress = Float(capturedAngles.count) / Float(requiredAngles)
+        let angleProgress = Float(capturedAngles.count) / Float(configuration.requiredAngles)
 
         // Also consider mesh density
-        let meshDensity = min(Float(meshAnchors.count) / 10.0, 1.0)
+        let meshDensity = min(Float(meshAnchors.count) / Float(configuration.meshDensityTarget), 1.0)
 
         scanProgress = min((angleProgress + meshDensity) / 2.0, 1.0)
     }
@@ -325,8 +423,8 @@ final class LiDARScanningService: NSObject, ObservableObject {
         let angle = atan2(forward.x, forward.z)
         let degrees = Int(angle * 180 / .pi)
 
-        // Quantize to 36-degree buckets (10 buckets for 360 degrees)
-        return (degrees + 180) / 36
+        // Quantize to angle bucket size (e.g., 36-degree buckets = 10 buckets for 360 degrees)
+        return (degrees + 180) / configuration.angleBucketSize
     }
 
     // MARK: - Texture Capture
@@ -335,8 +433,8 @@ final class LiDARScanningService: NSObject, ObservableObject {
         guard isScanning else { return }
 
         let now = Date()
-        guard now.timeIntervalSince(lastTextureCapture) >= textureCaptureInterval else { return }
-        guard capturedTextureFrames.count < maxTextureFrames else { return }
+        guard now.timeIntervalSince(lastTextureCapture) >= configuration.textureCaptureInterval else { return }
+        guard capturedTextureFrames.count < configuration.maxTextureFrames else { return }
 
         // Convert pixel buffer to CGImage
         let pixelBuffer = frame.capturedImage
