@@ -237,6 +237,18 @@ struct FaceScanView: View {
             Text("This may take a few seconds")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.7))
+
+            // Cancel button
+            Button(action: { viewModel.cancelProcessing() }) {
+                Text("Cancel")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 8)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(8)
+            }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.opacity(0.6))
@@ -495,6 +507,9 @@ class FaceScanViewModel: ObservableObject {
     private let exportService = MeshExportService()
     private let storageService = ScanStorageService.shared
 
+    // MARK: - Task Management
+    private var processingTask: Task<Void, Error>?
+
     // MARK: - Computed Properties
     var isDeviceSupported: Bool {
         LiDARScanningService.isLiDARAvailable
@@ -624,13 +639,17 @@ class FaceScanViewModel: ObservableObject {
         processingProgress = 0.0
 
         // Process and save the mesh
-        Task {
+        processingTask = Task {
             do {
+                try Task.checkCancellation()
+
                 guard let mesh = scanningService.capturedMesh else {
                     errorMessage = "No mesh data captured"
                     scanState = .ready
                     return
                 }
+
+                try Task.checkCancellation()
 
                 // Process the mesh with progress reporting
                 processedMesh = try await processingService.process(
@@ -642,6 +661,8 @@ class FaceScanViewModel: ObservableObject {
                         self?.processingProgress = progress
                     }
                 }
+
+                try Task.checkCancellation()
 
                 // Create scan model
                 let dateFormatter = DateFormatter()
@@ -659,6 +680,8 @@ class FaceScanViewModel: ObservableObject {
                 let meshFileName = try await storageService.saveMesh(mesh, for: scan)
                 scan.meshFileName = meshFileName
 
+                try Task.checkCancellation()
+
                 // Save texture if available
                 if let textureData = mesh.textureData, let atlasImage = textureData.atlasImage {
                     let textureFileName = try await storageService.saveTexture(atlasImage, for: scan)
@@ -675,11 +698,25 @@ class FaceScanViewModel: ObservableObject {
 
                 scanState = .completed
                 showCompletionAlert = true
+            } catch is CancellationError {
+                // Processing was cancelled by user
+                scanState = .ready
+                processingStep = ""
+                processingProgress = 0.0
             } catch {
                 errorMessage = error.localizedDescription
                 scanState = .ready
             }
         }
+    }
+
+    /// Cancel ongoing mesh processing
+    func cancelProcessing() {
+        processingTask?.cancel()
+        processingTask = nil
+        scanState = .ready
+        processingStep = ""
+        processingProgress = 0.0
     }
 
     func resetScan() {
