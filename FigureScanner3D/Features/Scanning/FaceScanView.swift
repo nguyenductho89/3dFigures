@@ -530,48 +530,6 @@ struct LiDARScanARView: UIViewRepresentable {
     }
 }
 
-// MARK: - Share Sheet
-struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
-// MARK: - Mesh Preview View (Placeholder)
-struct MeshPreviewView: View {
-    let mesh: CapturedMesh
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack {
-                // 3D preview would go here using SceneKit or RealityKit
-                Text("3D Preview")
-                    .font(.largeTitle)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Vertices: \(mesh.vertexCount)")
-                    Text("Faces: \(mesh.faceCount)")
-                    Text("Dimensions: \(String(format: "%.1f x %.1f x %.1f cm", mesh.dimensions.x * 100, mesh.dimensions.y * 100, mesh.dimensions.z * 100))")
-                }
-                .font(.subheadline)
-                .padding()
-            }
-            .navigationTitle("Scan Preview")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
 #Preview {
     FaceScanView()
 }

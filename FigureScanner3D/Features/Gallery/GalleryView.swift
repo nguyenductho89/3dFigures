@@ -3,11 +3,15 @@ import SwiftUI
 struct GalleryView: View {
     @StateObject private var viewModel = GalleryViewModel()
     @State private var searchText = ""
+    @State private var selectedScan: Scan3DModel?
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if viewModel.scans.isEmpty {
+                if viewModel.isLoading {
+                    loadingView
+                } else if viewModel.scans.isEmpty {
                     emptyState
                 } else {
                     scanGrid
@@ -17,18 +21,61 @@ struct GalleryView: View {
             .searchable(text: $searchText, prompt: "Search scans")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Date", action: { viewModel.sortBy(.date) })
-                        Button("Name", action: { viewModel.sortBy(.name) })
-                        Button("Type", action: { viewModel.sortBy(.type) })
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
+                    HStack(spacing: 16) {
+                        // View mode toggle
+                        Button(action: { viewModel.toggleViewMode() }) {
+                            Image(systemName: viewModel.viewMode == .grid ? "list.bullet" : "square.grid.2x2")
+                        }
+
+                        // Sort menu
+                        Menu {
+                            ForEach(GalleryViewModel.SortOption.allCases, id: \.self) { option in
+                                Button(action: { viewModel.sortBy(option) }) {
+                                    HStack {
+                                        Text(option.displayName)
+                                        if viewModel.sortOption == option {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                        }
                     }
                 }
+            }
+            .refreshable {
+                await viewModel.loadScans()
+            }
+            .sheet(item: $selectedScan) { scan in
+                ScanDetailSheet(scan: scan, viewModel: viewModel)
+            }
+            .alert("Delete Scan", isPresented: $showDeleteConfirmation, presenting: selectedScan) { scan in
+                Button("Delete", role: .destructive) {
+                    Task { await viewModel.deleteScan(scan) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { scan in
+                Text("Are you sure you want to delete '\(scan.name)'? This cannot be undone.")
+            }
+            .task {
+                await viewModel.loadScans()
             }
         }
     }
 
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Loading scans...")
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Empty State
     private var emptyState: some View {
         VStack(spacing: 20) {
             Image(systemName: "cube.transparent")
@@ -55,24 +102,85 @@ struct GalleryView: View {
         .padding()
     }
 
+    // MARK: - Scan Grid/List
     private var scanGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                ForEach(viewModel.filteredScans(searchText)) { scan in
-                    ScanCard(scan: scan)
+            if viewModel.viewMode == .grid {
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 16) {
+                    ForEach(viewModel.filteredScans(searchText)) { scan in
+                        ScanGridCard(scan: scan)
+                            .onTapGesture { selectedScan = scan }
+                            .contextMenu { scanContextMenu(for: scan) }
+                    }
                 }
+                .padding()
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(viewModel.filteredScans(searchText)) { scan in
+                        ScanListRow(scan: scan)
+                            .onTapGesture { selectedScan = scan }
+                            .contextMenu { scanContextMenu(for: scan) }
+                    }
+                }
+                .padding()
             }
-            .padding()
+        }
+    }
+
+    // MARK: - Context Menu
+    @ViewBuilder
+    private func scanContextMenu(for scan: Scan3DModel) -> some View {
+        Button {
+            selectedScan = scan
+        } label: {
+            Label("View Details", systemImage: "info.circle")
+        }
+
+        Button {
+            viewModel.renamingScan = scan
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
+
+        Menu {
+            Button {
+                Task { await viewModel.exportScan(scan, format: .stl) }
+            } label: {
+                Label("Export STL", systemImage: "cube")
+            }
+
+            Button {
+                Task { await viewModel.exportScan(scan, format: .obj) }
+            } label: {
+                Label("Export OBJ", systemImage: "cube.transparent")
+            }
+
+            Button {
+                Task { await viewModel.exportScan(scan, format: .ply) }
+            } label: {
+                Label("Export PLY", systemImage: "point.3.filled.connected.trianglepath.dotted")
+            }
+        } label: {
+            Label("Export", systemImage: "square.and.arrow.up")
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            selectedScan = scan
+            showDeleteConfirmation = true
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 }
 
-// MARK: - Scan Card
-struct ScanCard: View {
-    let scan: Scan3D
+// MARK: - Scan Grid Card
+struct ScanGridCard: View {
+    let scan: Scan3DModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -93,9 +201,176 @@ struct ScanCard: View {
                     .font(.headline)
                     .lineLimit(1)
 
+                HStack {
+                    Image(systemName: scan.type.icon)
+                        .font(.caption2)
+                    Text(scan.type.displayName)
+                        .font(.caption2)
+                }
+                .foregroundColor(.secondary)
+
                 Text(scan.dateFormatted)
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
+            }
+        }
+        .padding(8)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(16)
+    }
+}
+
+// MARK: - Scan List Row
+struct ScanListRow: View {
+    let scan: Scan3DModel
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(scan.type.color.opacity(0.15))
+                    .frame(width: 50, height: 50)
+
+                Image(systemName: scan.type.icon)
+                    .font(.title2)
+                    .foregroundColor(scan.type.color)
+            }
+
+            // Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(scan.name)
+                    .font(.headline)
+
+                HStack(spacing: 8) {
+                    Text(scan.type.displayName)
+                    Text("•")
+                    Text(scan.fileSizeFormatted)
+                    Text("•")
+                    Text(scan.dateFormatted)
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Scan Detail Sheet
+struct ScanDetailSheet: View {
+    let scan: Scan3DModel
+    @ObservedObject var viewModel: GalleryViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // Preview Section
+                Section {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 200)
+
+                        VStack {
+                            Image(systemName: scan.type.icon)
+                                .font(.system(size: 60))
+                                .foregroundColor(scan.type.color)
+
+                            Text("3D Preview")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+
+                // Info Section
+                Section("Details") {
+                    LabeledContent("Name", value: scan.name)
+                    LabeledContent("Type", value: scan.type.displayName)
+                    LabeledContent("Created", value: scan.dateFormatted)
+                    LabeledContent("Vertices", value: scan.vertexCount.formattedWithSeparator)
+                    LabeledContent("Faces", value: scan.faceCount.formattedWithSeparator)
+                    LabeledContent("File Size", value: scan.fileSizeFormatted)
+                    if let dims = scan.dimensionsFormatted {
+                        LabeledContent("Dimensions", value: dims)
+                    }
+                }
+
+                // Export Section
+                Section("Export") {
+                    ForEach(ExportFormat.allCases, id: \.self) { format in
+                        Button {
+                            Task {
+                                await viewModel.exportScan(scan, format: format)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "square.and.arrow.up")
+                                Text(format.displayName)
+                                Spacer()
+                                if format.supportsTexture && scan.vertexCount > 0 {
+                                    Text("+ Texture")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Export History
+                if !scan.exports.isEmpty {
+                    Section("Export History") {
+                        ForEach(scan.exports) { export in
+                            HStack {
+                                Text(export.format.rawValue)
+                                    .font(.headline)
+                                Spacer()
+                                VStack(alignment: .trailing) {
+                                    Text(export.exportedAt.timeAgoString)
+                                    Text(export.fileSize.fileSizeFormatted)
+                                }
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                // Danger Zone
+                Section {
+                    Button(role: .destructive) {
+                        Task {
+                            await viewModel.deleteScan(scan)
+                            dismiss()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Delete Scan")
+                        }
+                    }
+                }
+            }
+            .navigationTitle(scan.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
             }
         }
     }
@@ -104,66 +379,106 @@ struct ScanCard: View {
 // MARK: - View Model
 @MainActor
 class GalleryViewModel: ObservableObject {
-    enum SortOption {
-        case date, name, type
+    enum SortOption: String, CaseIterable {
+        case dateNewest, dateOldest, name, type, size
+
+        var displayName: String {
+            switch self {
+            case .dateNewest: return "Newest First"
+            case .dateOldest: return "Oldest First"
+            case .name: return "Name"
+            case .type: return "Type"
+            case .size: return "Size"
+            }
+        }
     }
 
-    @Published var scans: [Scan3D] = []
-    @Published var sortOption: SortOption = .date
+    enum ViewMode {
+        case grid, list
+    }
+
+    @Published var scans: [Scan3DModel] = []
+    @Published var sortOption: SortOption = .dateNewest
+    @Published var viewMode: ViewMode = .grid
+    @Published var isLoading = false
+    @Published var renamingScan: Scan3DModel?
+    @Published var errorMessage: String?
+
+    private let storageService = ScanStorageService.shared
+    private let exportService = MeshExportService()
+
+    func loadScans() async {
+        isLoading = true
+        do {
+            scans = try await storageService.loadAllScans()
+            applySorting()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
 
     func sortBy(_ option: SortOption) {
         sortOption = option
-        switch option {
-        case .date:
-            scans.sort { $0.createdAt > $1.createdAt }
-        case .name:
-            scans.sort { $0.name < $1.name }
-        case .type:
-            scans.sort { $0.type.rawValue < $1.type.rawValue }
-        }
+        applySorting()
     }
 
-    func filteredScans(_ searchText: String) -> [Scan3D] {
+    func toggleViewMode() {
+        viewMode = viewMode == .grid ? .list : .grid
+    }
+
+    func filteredScans(_ searchText: String) -> [Scan3DModel] {
         if searchText.isEmpty {
             return scans
         }
-        return scans.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-}
-
-// MARK: - Models
-struct Scan3D: Identifiable {
-    let id = UUID()
-    var name: String
-    let type: ScanType
-    let createdAt: Date
-    var thumbnailData: Data?
-    var meshURL: URL?
-
-    var dateFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: createdAt)
-    }
-}
-
-enum ScanType: String {
-    case face, body, bust
-
-    var icon: String {
-        switch self {
-        case .face: return "face.smiling"
-        case .body: return "figure.stand"
-        case .bust: return "person.bust"
+        return scans.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.type.displayName.localizedCaseInsensitiveContains(searchText)
         }
     }
 
-    var color: Color {
-        switch self {
-        case .face: return .blue
-        case .body: return .green
-        case .bust: return .purple
+    func deleteScan(_ scan: Scan3DModel) async {
+        do {
+            try await storageService.deleteScan(scan)
+            scans.removeAll { $0.id == scan.id }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func exportScan(_ scan: Scan3DModel, format: ExportFormat) async {
+        // Export logic would go here
+        // For now, we just record the export
+        var updatedScan = scan
+        let record = ExportRecord(
+            format: format,
+            fileName: "\(scan.name).\(format.fileExtension)",
+            fileSize: scan.fileSize
+        )
+        updatedScan.exports.append(record)
+
+        do {
+            try await storageService.saveScan(updatedScan)
+            if let index = scans.firstIndex(where: { $0.id == scan.id }) {
+                scans[index] = updatedScan
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applySorting() {
+        switch sortOption {
+        case .dateNewest:
+            scans.sort { $0.createdAt > $1.createdAt }
+        case .dateOldest:
+            scans.sort { $0.createdAt < $1.createdAt }
+        case .name:
+            scans.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .type:
+            scans.sort { $0.type.rawValue < $1.type.rawValue }
+        case .size:
+            scans.sort { $0.fileSize > $1.fileSize }
         }
     }
 }
