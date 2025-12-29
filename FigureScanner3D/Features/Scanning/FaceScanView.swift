@@ -470,11 +470,14 @@ class FaceScanViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showExportSheet = false
     @Published var exportedFileURL: URL?
+    @Published var processedMesh: MeshProcessingService.ProcessedMesh?
+    @Published var savedScan: Scan3DModel?
 
     // MARK: - Services
     let scanningService = LiDARScanningService()
     private let processingService = MeshProcessingService()
     private let exportService = MeshExportService()
+    private let storageService = ScanStorageService.shared
 
     // MARK: - Computed Properties
     var isDeviceSupported: Bool {
@@ -602,12 +605,48 @@ class FaceScanViewModel: ObservableObject {
         scanState = .processing
         scanningService.stopScanning()
 
-        // Process the mesh
+        // Process and save the mesh
         Task {
             do {
-                if let mesh = scanningService.capturedMesh {
-                    let _ = try await processingService.process(mesh)
+                guard let mesh = scanningService.capturedMesh else {
+                    errorMessage = "No mesh data captured"
+                    scanState = .ready
+                    return
                 }
+
+                // Process the mesh
+                processedMesh = try await processingService.process(mesh)
+
+                // Create scan model
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+                let scanName = "Face Scan \(dateFormatter.string(from: Date()))"
+
+                var scan = Scan3DModel(
+                    name: scanName,
+                    type: .face,
+                    vertexCount: mesh.vertexCount,
+                    faceCount: mesh.faceCount
+                )
+
+                // Save mesh to storage
+                let meshFileName = try await storageService.saveMesh(mesh, for: scan)
+                scan.meshFileName = meshFileName
+
+                // Save texture if available
+                if let textureData = mesh.textureData, let atlasImage = textureData.atlasImage {
+                    let textureFileName = try await storageService.saveTexture(atlasImage, for: scan)
+                    scan.textureFileName = textureFileName
+                }
+
+                // Calculate dimensions
+                let dims = mesh.dimensions
+                scan.dimensions = ScanDimensions(width: dims.x, height: dims.y, depth: dims.z)
+
+                // Save scan metadata
+                try await storageService.saveScan(scan)
+                savedScan = scan
+
                 scanState = .completed
                 showCompletionAlert = true
             } catch {
@@ -622,6 +661,8 @@ class FaceScanViewModel: ObservableObject {
         scanProgress = 0.0
         scanningService.resetScan()
         errorMessage = nil
+        processedMesh = nil
+        savedScan = nil
     }
 
     func dismissError() {
