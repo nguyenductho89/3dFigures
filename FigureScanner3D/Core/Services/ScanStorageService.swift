@@ -5,7 +5,8 @@ import Combine
 /// Service for persisting and managing saved 3D scans
 actor ScanStorageService {
 
-    // MARK: - Singleton
+    // MARK: - Singleton (Deprecated - use AppServices DI instead)
+    @available(*, deprecated, message: "Use AppServices.storageService via EnvironmentObject instead")
     static let shared = ScanStorageService()
 
     // MARK: - Properties
