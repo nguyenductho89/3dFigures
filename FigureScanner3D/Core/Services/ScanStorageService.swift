@@ -233,7 +233,7 @@ actor ScanStorageService {
             }
         }
 
-        await setupDirectories()
+        try await setupDirectories()
     }
 
     // MARK: - Private Helpers

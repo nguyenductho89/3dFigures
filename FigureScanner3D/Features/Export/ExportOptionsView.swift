@@ -300,22 +300,6 @@ extension MeshExportService.ExportFormat {
         case .usdz: return "arkit"
         }
     }
-
-    var displayName: String {
-        switch self {
-        case .stl: return "STL (3D Print)"
-        case .obj: return "OBJ (With Texture)"
-        case .ply: return "PLY (Point Cloud)"
-        case .usdz: return "USDZ (AR Quick Look)"
-        }
-    }
-
-    var supportsTexture: Bool {
-        switch self {
-        case .obj, .usdz: return true
-        case .stl, .ply: return false
-        }
-    }
 }
 
 #Preview {
