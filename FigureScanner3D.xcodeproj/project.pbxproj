@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -70,7 +70,7 @@
 		B9BCE60D01876A4532A01F8B /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		BBFEEB84555ABAE0BB798102 /* MeshPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshPreviewView.swift; sourceTree = "<group>"; };
 		BF083CAE4356277081632311 /* BustScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BustScanView.swift; sourceTree = "<group>"; };
-		C317A1B7B473163F17357459 /* FigureScanner3D.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FigureScanner3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C317A1B7B473163F17357459 /* FigureScanner3D.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FigureScanner3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5C777EADE8C51E4A5618462 /* ShareExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExportView.swift; sourceTree = "<group>"; };
 		D3F6059B963F5DC4FABE7D20 /* FaceScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceScanView.swift; sourceTree = "<group>"; };
 		D66A9994F20BED7086800C1C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -331,7 +331,6 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					4B7311E7F21A5254ED33F1AF = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					61756F54EFF0CCEEE1DDCC01 = {
@@ -355,7 +354,6 @@
 			);
 			mainGroup = 471893114872AB2CDDEA9ECA;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -442,12 +440,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = FigureScanner3D/Resources/FigureScanner3D.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 46W25C8KDG;
 				INFOPLIST_FILE = FigureScanner3D/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.nguyenductho89.FigureScanner3D;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ominext.testPush;
 				SDKROOT = iphoneos;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -460,12 +459,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = FigureScanner3D/Resources/FigureScanner3D.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 46W25C8KDG;
 				INFOPLIST_FILE = FigureScanner3D/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.nguyenductho89.FigureScanner3D;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ominext.testPush;
 				SDKROOT = iphoneos;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";

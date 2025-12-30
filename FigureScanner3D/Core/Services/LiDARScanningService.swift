@@ -51,8 +51,10 @@ struct ScanConfiguration {
         textureCaptureInterval: 0.2,
         maxTextureFrames: 30,
         faceScanBounds: BoundingBox(
-            min: SIMD3<Float>(-0.15, -0.20, -0.15),
-            max: SIMD3<Float>(0.15, 0.15, 0.10)
+            // Expanded bounds to capture face mesh when head is turned
+            // Width: 50cm, Height: 50cm, Depth: 40cm (centered on face)
+            min: SIMD3<Float>(-0.25, -0.30, -0.20),
+            max: SIMD3<Float>(0.25, 0.20, 0.20)
         ),
         lightingThresholds: .default,
         meshDensityTarget: 10,
@@ -65,8 +67,9 @@ struct ScanConfiguration {
         textureCaptureInterval: 0.1,
         maxTextureFrames: 60,
         faceScanBounds: BoundingBox(
-            min: SIMD3<Float>(-0.18, -0.25, -0.18),
-            max: SIMD3<Float>(0.18, 0.18, 0.12)
+            // Expanded bounds for high quality capture
+            min: SIMD3<Float>(-0.28, -0.35, -0.25),
+            max: SIMD3<Float>(0.28, 0.25, 0.25)
         ),
         lightingThresholds: .default,
         meshDensityTarget: 15,
@@ -79,8 +82,9 @@ struct ScanConfiguration {
         textureCaptureInterval: 0.3,
         maxTextureFrames: 15,
         faceScanBounds: BoundingBox(
-            min: SIMD3<Float>(-0.12, -0.18, -0.12),
-            max: SIMD3<Float>(0.12, 0.12, 0.08)
+            // Smaller bounds for quick scan, but still reasonable
+            min: SIMD3<Float>(-0.20, -0.25, -0.15),
+            max: SIMD3<Float>(0.20, 0.15, 0.15)
         ),
         lightingThresholds: .default,
         meshDensityTarget: 8,
@@ -132,6 +136,16 @@ final class LiDARScanningService: NSObject, ObservableObject {
     private var faceAnchor: ARFaceAnchor?
     private var scanStartTime: Date?
     private var capturedAngles: Set<Int> = []
+
+    /// Stores the last valid face transform for use during mesh processing
+    /// This prevents 0 vertices when face tracking is temporarily lost
+    private var lastValidFaceTransform: simd_float4x4?
+
+    // Face geometry capture for face scanning mode
+    // Stores face mesh data captured at different angles
+    private var capturedFaceGeometries: [CapturedFaceGeometry] = []
+    private var lastFaceGeometryCapture: Date = .distantPast
+    private let faceGeometryCaptureInterval: TimeInterval = 0.2 // Capture every 200ms (slower, more stable)
 
     // Texture capture properties
     private var capturedTextureFrames: [CapturedTextureFrame] = []
@@ -210,10 +224,13 @@ final class LiDARScanningService: NSObject, ObservableObject {
         meshAnchors.removeAll()
         capturedAngles.removeAll()
         capturedTextureFrames.removeAll()
+        capturedFaceGeometries.removeAll()
         capturedMesh = nil
         faceAnchor = nil
+        lastValidFaceTransform = nil
         errorMessage = nil
         lastTextureCapture = .distantPast
+        lastFaceGeometryCapture = .distantPast
     }
 
     // MARK: - Private Methods
@@ -230,22 +247,22 @@ final class LiDARScanningService: NSObject, ObservableObject {
     }
 
     private func setupFaceScanSession(arView: ARView) {
-        // Use world tracking with scene reconstruction for LiDAR mesh
-        // Combined with face tracking for face detection
-        let configuration = ARWorldTrackingConfiguration()
-
-        if Self.isLiDARAvailable {
-            configuration.sceneReconstruction = .meshWithClassification
-            configuration.environmentTexturing = .automatic
+        // Use ARFaceTrackingConfiguration to use the TrueDepth front camera
+        // This provides ARFaceAnchor with face geometry mesh data
+        guard Self.isFaceTrackingAvailable else {
+            errorMessage = "Face tracking is not available on this device"
+            return
         }
 
-        // Enable face tracking if available
-        if Self.isFaceTrackingAvailable {
-            configuration.userFaceTrackingEnabled = true
+        let configuration = ARFaceTrackingConfiguration()
+
+        // Enable world tracking if available (for better positioning)
+        if ARFaceTrackingConfiguration.supportsWorldTracking {
+            configuration.isWorldTrackingEnabled = true
         }
 
-        configuration.frameSemantics.insert(.personSegmentation)
-        configuration.planeDetection = []
+        // Maximum number of faces to track
+        configuration.maximumNumberOfTrackedFaces = 1
 
         arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
@@ -264,6 +281,13 @@ final class LiDARScanningService: NSObject, ObservableObject {
     }
 
     private func processCapturedMesh() {
+        // For face scanning, use captured face geometries from TrueDepth camera
+        if scanMode == .face {
+            processFaceGeometries()
+            return
+        }
+
+        // For body/bust scanning, use LiDAR mesh anchors
         guard !meshAnchors.isEmpty else {
             errorMessage = "No mesh data captured"
             return
@@ -288,21 +312,7 @@ final class LiDARScanningService: NSObject, ObservableObject {
 
                 // Transform vertex to world space
                 let worldVertex = anchor.transform * SIMD4<Float>(vertex.x, vertex.y, vertex.z, 1.0)
-
-                // Filter vertices based on scan bounds (for face scan)
-                if scanMode == .face {
-                    if let faceTransform = faceTransform {
-                        // Convert to face-local space
-                        let faceInverse = faceTransform.inverse
-                        let localVertex = faceInverse * worldVertex
-
-                        if configuration.faceScanBounds.contains(SIMD3<Float>(localVertex.x, localVertex.y, localVertex.z)) {
-                            allVertices.append(SIMD3<Float>(worldVertex.x, worldVertex.y, worldVertex.z))
-                        }
-                    }
-                } else {
-                    allVertices.append(SIMD3<Float>(worldVertex.x, worldVertex.y, worldVertex.z))
-                }
+                allVertices.append(SIMD3<Float>(worldVertex.x, worldVertex.y, worldVertex.z))
             }
 
             // Get normals
@@ -382,6 +392,112 @@ final class LiDARScanningService: NSObject, ObservableObject {
         )
     }
 
+    /// Process captured face geometries from TrueDepth camera into final mesh
+    private func processFaceGeometries() {
+        guard !capturedFaceGeometries.isEmpty else {
+            errorMessage = "No face data captured. Make sure your face is visible to the front camera."
+            return
+        }
+
+        // Find the geometry with most vertices (best quality capture)
+        let bestGeometry = capturedFaceGeometries.max(by: { $0.vertices.count < $1.vertices.count })!
+
+        // Log for debugging
+        print("[FaceScan] Processing \(capturedFaceGeometries.count) captured geometries")
+        print("[FaceScan] Best geometry has \(bestGeometry.vertices.count) vertices, \(bestGeometry.triangleCount) triangles")
+
+        var allVertices: [SIMD3<Float>] = []
+        var allNormals: [SIMD3<Float>] = []
+        var allFaces: [[Int]] = []
+
+        // Extract vertices from captured geometry (already copied from ARFaceGeometry)
+        let vertexCount = bestGeometry.vertices.count
+
+        for i in 0..<vertexCount {
+            let vertex = bestGeometry.vertices[i]
+            // Transform vertex from face-local space to world space
+            let worldVertex = bestGeometry.transform * SIMD4<Float>(vertex.x, vertex.y, vertex.z, 1.0)
+            allVertices.append(SIMD3<Float>(worldVertex.x, worldVertex.y, worldVertex.z))
+        }
+
+        // Generate normals (compute from faces)
+        allNormals = Array(repeating: SIMD3<Float>(0, 0, 0), count: vertexCount)
+
+        // Get triangle indices and compute face normals
+        let triangleCount = bestGeometry.triangleCount
+
+        for i in 0..<triangleCount {
+            let baseIdx = i * 3
+            let idx0 = Int(bestGeometry.triangleIndices[baseIdx])
+            let idx1 = Int(bestGeometry.triangleIndices[baseIdx + 1])
+            let idx2 = Int(bestGeometry.triangleIndices[baseIdx + 2])
+
+            allFaces.append([idx0, idx1, idx2])
+
+            // Compute face normal
+            let v0 = allVertices[idx0]
+            let v1 = allVertices[idx1]
+            let v2 = allVertices[idx2]
+
+            let edge1 = v1 - v0
+            let edge2 = v2 - v0
+            let faceNormal = normalize(cross(edge1, edge2))
+
+            // Accumulate normals for smooth shading
+            allNormals[idx0] += faceNormal
+            allNormals[idx1] += faceNormal
+            allNormals[idx2] += faceNormal
+        }
+
+        // Normalize accumulated normals
+        for i in 0..<allNormals.count {
+            let len = length(allNormals[i])
+            if len > 0 {
+                allNormals[i] = allNormals[i] / len
+            }
+        }
+
+        // Get texture coordinates from captured geometry
+        let textureCoords: [SIMD2<Float>]? = bestGeometry.textureCoordinates
+
+        // Generate texture data from captured frames
+        var textureData: MeshTextureData? = nil
+        if !capturedTextureFrames.isEmpty {
+            let (atlasImage, atlasSize) = createTextureAtlas()
+            textureData = MeshTextureData(
+                frames: capturedTextureFrames,
+                atlasImage: atlasImage,
+                atlasSize: atlasSize
+            )
+        }
+
+        // Create captured mesh
+        capturedMesh = CapturedMesh(
+            vertices: allVertices,
+            normals: allNormals,
+            faces: allFaces,
+            textureCoordinates: textureCoords,
+            textureData: textureData,
+            scanMode: scanMode,
+            captureDate: Date()
+        )
+    }
+
+    /// Capture face geometry from ARFaceAnchor
+    private func captureFaceGeometry(from faceAnchor: ARFaceAnchor) {
+        let now = Date()
+        guard now.timeIntervalSince(lastFaceGeometryCapture) >= faceGeometryCaptureInterval else { return }
+
+        // Create captured geometry with copied vertex data
+        let capturedGeometry = CapturedFaceGeometry(
+            from: faceAnchor,
+            angle: calculateFaceAngle()
+        )
+
+        capturedFaceGeometries.append(capturedGeometry)
+        lastFaceGeometryCapture = now
+    }
+
     private func updateLightingQuality(frame: ARFrame) {
         guard let lightEstimate = frame.lightEstimate else {
             lightingQuality = .fair
@@ -404,13 +520,33 @@ final class LiDARScanningService: NSObject, ObservableObject {
     }
 
     private func updateScanProgress() {
-        // Calculate progress based on captured angles
-        let angleProgress = Float(capturedAngles.count) / Float(configuration.requiredAngles)
+        let newProgress: Float
 
-        // Also consider mesh density
-        let meshDensity = min(Float(meshAnchors.count) / Float(configuration.meshDensityTarget), 1.0)
+        if scanMode == .face {
+            // For face scanning, progress is primarily based on scan duration
+            // This ensures user has enough time to turn head through all positions
+            let scanDuration: Float = 8.0 // 8 seconds for complete scan
+            let elapsedTime = Float(Date().timeIntervalSince(scanStartTime ?? Date()))
+            let timeProgress = min(elapsedTime / scanDuration, 1.0)
 
-        scanProgress = min((angleProgress + meshDensity) / 2.0, 1.0)
+            // Also require minimum captures to ensure we have data
+            let minRequiredCaptures: Float = 20.0
+            let captureProgress = min(Float(capturedFaceGeometries.count) / minRequiredCaptures, 1.0)
+
+            // Progress = 80% time-based + 20% capture-based
+            // This ensures scan takes enough time for user to complete all head movements
+            newProgress = (timeProgress * 0.8) + (captureProgress * 0.2)
+        } else {
+            // For body/bust scanning, use LiDAR mesh anchors
+            let angleProgress = Float(capturedAngles.count) / Float(configuration.requiredAngles)
+            let meshDensity = min(Float(meshAnchors.count) / Float(configuration.meshDensityTarget), 1.0)
+            newProgress = min((angleProgress + meshDensity) / 2.0, 1.0)
+        }
+
+        // Only allow progress to increase, never decrease
+        if newProgress > scanProgress {
+            scanProgress = newProgress
+        }
     }
 
     private func calculateFaceAngle() -> Int? {
@@ -527,11 +663,22 @@ extension LiDARScanningService: ARSessionDelegate {
             captureTextureFrame(from: frame)
 
             // Update face tracking
+            var faceFoundInFrame = false
             for anchor in frame.anchors {
                 if let faceAnchor = anchor as? ARFaceAnchor {
                     self.faceAnchor = faceAnchor
                     self.faceDetected = true
                     self.faceTransform = faceAnchor.transform
+
+                    // Save last valid face transform for mesh processing
+                    if isScanning {
+                        self.lastValidFaceTransform = faceAnchor.transform
+
+                        // Capture face geometry for face scanning mode
+                        if scanMode == .face {
+                            captureFaceGeometry(from: faceAnchor)
+                        }
+                    }
 
                     // Calculate distance to face
                     let facePosition = SIMD3<Float>(
@@ -546,7 +693,15 @@ extension LiDARScanningService: ARSessionDelegate {
                         capturedAngles.insert(angle)
                         updateScanProgress()
                     }
+
+                    faceFoundInFrame = true
                 }
+            }
+
+            // When face is temporarily lost during scanning, continue to update progress
+            // based on captured face geometries
+            if isScanning && !faceFoundInFrame {
+                updateScanProgress()
             }
         }
     }
@@ -557,6 +712,20 @@ extension LiDARScanningService: ARSessionDelegate {
                 if let meshAnchor = anchor as? ARMeshAnchor, isScanning {
                     meshAnchors.append(meshAnchor)
                     updateScanProgress()
+                }
+
+                if let faceAnchor = anchor as? ARFaceAnchor {
+                    self.faceAnchor = faceAnchor
+                    self.faceDetected = true
+                    self.faceTransform = faceAnchor.transform
+
+                    // Calculate distance to face
+                    let facePosition = SIMD3<Float>(
+                        faceAnchor.transform.columns.3.x,
+                        faceAnchor.transform.columns.3.y,
+                        faceAnchor.transform.columns.3.z
+                    )
+                    self.distanceToFace = length(facePosition)
                 }
             }
         }
@@ -577,7 +746,31 @@ extension LiDARScanningService: ARSessionDelegate {
 
                 if let faceAnchor = anchor as? ARFaceAnchor {
                     self.faceAnchor = faceAnchor
+                    self.faceDetected = true
                     self.faceTransform = faceAnchor.transform
+
+                    // Calculate distance to face
+                    let facePosition = SIMD3<Float>(
+                        faceAnchor.transform.columns.3.x,
+                        faceAnchor.transform.columns.3.y,
+                        faceAnchor.transform.columns.3.z
+                    )
+                    self.distanceToFace = length(facePosition)
+
+                    // Capture face geometry during scanning
+                    if isScanning {
+                        self.lastValidFaceTransform = faceAnchor.transform
+
+                        if scanMode == .face {
+                            captureFaceGeometry(from: faceAnchor)
+                        }
+
+                        // Track captured angles
+                        if let angle = calculateFaceAngle() {
+                            capturedAngles.insert(angle)
+                        }
+                        updateScanProgress()
+                    }
                 }
             }
         }
@@ -610,6 +803,36 @@ struct CapturedTextureFrame {
     let transform: simd_float4x4  // Camera transform when captured
     let intrinsics: simd_float3x3  // Camera intrinsics
     let imageResolution: CGSize
+}
+
+/// Captured face geometry data from TrueDepth camera
+/// Stores copied vertex data since ARFaceGeometry buffers are invalidated after each frame
+struct CapturedFaceGeometry {
+    let vertices: [SIMD3<Float>]
+    let textureCoordinates: [SIMD2<Float>]
+    let triangleIndices: [Int16]
+    let triangleCount: Int
+    let transform: simd_float4x4  // Face transform when captured
+    let timestamp: Date
+    let angle: Int?  // Face angle bucket when captured
+
+    init(from faceAnchor: ARFaceAnchor, angle: Int?) {
+        let geometry = faceAnchor.geometry
+
+        // Safely copy vertices using Array initializer (atomic copy)
+        self.vertices = Array(geometry.vertices).map { SIMD3<Float>($0.x, $0.y, $0.z) }
+
+        // Safely copy texture coordinates
+        self.textureCoordinates = Array(geometry.textureCoordinates).map { SIMD2<Float>($0.x, $0.y) }
+
+        // Safely copy triangle indices (ARFaceGeometry uses Int16 for indices)
+        self.triangleIndices = Array(geometry.triangleIndices)
+        self.triangleCount = geometry.triangleCount
+
+        self.transform = faceAnchor.transform
+        self.timestamp = Date()
+        self.angle = angle
+    }
 }
 
 /// Texture data for the mesh

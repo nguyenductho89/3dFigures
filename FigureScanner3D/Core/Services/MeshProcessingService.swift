@@ -270,8 +270,9 @@ actor MeshProcessingService {
         var validFlags = [Bool](repeating: false, count: vertices.count)
         let thresholdMultiplied = threshold * 10
 
-        if vertices.count > 1000 {
-            // Parallel processing for large meshes
+        if vertices.count > 10000 {
+            // Parallel processing for very large meshes only
+            // Swift arrays aren't thread-safe, avoid for small meshes like face (~1220 vertices)
             DispatchQueue.concurrentPerform(iterations: vertices.count) { i in
                 let neighbors = topology.adjacency[i]
                 guard !neighbors.isEmpty else { return }
@@ -408,7 +409,9 @@ actor MeshProcessingService {
         // Build topology once and reuse for all iterations
         let topology = MeshTopology(faces: faces, vertexCount: vertices.count)
         let adjacency = topology.adjacency
-        let useParallel = vertices.count > 1000
+        // Disable parallel processing - Swift arrays aren't thread-safe for concurrent writes
+        // Face mesh is ~1220 vertices which is small enough for sequential processing
+        let useParallel = false // vertices.count > 10000
         let oneMinusFactor = 1 - factor
 
         for _ in 0..<iterations {
@@ -483,8 +486,8 @@ actor MeshProcessingService {
             }
         }
 
-        // Normalize (parallel for large meshes)
-        if normals.count > 1000 {
+        // Normalize (parallel for very large meshes only)
+        if normals.count > 10000 {
             DispatchQueue.concurrentPerform(iterations: normals.count) { i in
                 let len = simd_length(normals[i])
                 if len > 0 {

@@ -201,8 +201,8 @@ struct FaceScanView: View {
 
             if viewModel.faceDetected && !viewModel.isDistanceOptimal {
                 QualityWarningBadge(
-                    icon: viewModel.distanceToFace < 0.25 ? "arrow.up.backward.and.arrow.down.forward" : "arrow.down.forward.and.arrow.up.backward",
-                    text: viewModel.distanceToFace < 0.25 ? "Too Close" : "Too Far",
+                    icon: viewModel.distanceToFace < 0.20 ? "arrow.up.backward.and.arrow.down.forward" : "arrow.down.forward.and.arrow.up.backward",
+                    text: viewModel.distanceToFace < 0.20 ? "Too Close" : "Too Far",
                     color: .orange
                 )
             }
@@ -261,11 +261,11 @@ struct FaceScanView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.orange)
 
-            Text("LiDAR Not Available")
+            Text("Face Tracking Not Available")
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("This device does not have a LiDAR sensor.\nFace scanning requires iPhone 12 Pro or later.")
+            Text("This device does not have a TrueDepth camera.\nFace scanning requires iPhone X or later.")
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
         }
@@ -511,22 +511,26 @@ class FaceScanViewModel: ObservableObject {
     private var processingTask: Task<Void, Error>?
 
     // MARK: - Computed Properties
+
+    /// Face scanning requires TrueDepth camera (front camera), NOT LiDAR
     var isDeviceSupported: Bool {
-        LiDARScanningService.isLiDARAvailable
+        LiDARScanningService.isFaceTrackingAvailable
     }
 
     var canStartScan: Bool {
         faceDetected && isDistanceOptimal && lightingQuality != .poor
     }
 
+    /// Optimal distance for TrueDepth face scanning: 20-80cm
+    /// TrueDepth works well at typical selfie distances
     var isDistanceOptimal: Bool {
-        distanceToFace >= 0.25 && distanceToFace <= 0.50
+        distanceToFace >= 0.20 && distanceToFace <= 0.80
     }
 
     var distanceGuidance: String {
-        if distanceToFace < 0.25 {
+        if distanceToFace < 0.20 {
             return "Move further away"
-        } else if distanceToFace > 0.50 {
+        } else if distanceToFace > 0.80 {
             return "Move closer"
         }
         return "Good distance"
