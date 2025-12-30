@@ -197,6 +197,10 @@ final class LiDARScanningService: NSObject, ObservableObject {
         scanProgress = 0.0
         meshAnchors.removeAll()
         capturedAngles.removeAll()
+        capturedFaceGeometries.removeAll()
+        capturedTextureFrames.removeAll()
+        lastFaceGeometryCapture = .distantPast
+        lastTextureCapture = .distantPast
         scanStartTime = Date()
         errorMessage = nil
 
@@ -212,6 +216,15 @@ final class LiDARScanningService: NSObject, ObservableObject {
         // Disable mesh visualization
         if let arView = arView {
             arView.debugOptions.remove(.showSceneUnderstanding)
+        }
+
+        // Validate minimum captures for face scan
+        if scanMode == .face {
+            let minCaptures = 5
+            if capturedFaceGeometries.count < minCaptures {
+                errorMessage = "Not enough data captured (\(capturedFaceGeometries.count)/\(minCaptures)). Please try scanning again with your face visible."
+                return
+            }
         }
 
         // Process captured mesh
@@ -399,12 +412,37 @@ final class LiDARScanningService: NSObject, ObservableObject {
             return
         }
 
-        // Find the geometry with most vertices (best quality capture)
-        let bestGeometry = capturedFaceGeometries.max(by: { $0.vertices.count < $1.vertices.count })!
-
-        // Log for debugging
+        // Log capture statistics
         print("[FaceScan] Processing \(capturedFaceGeometries.count) captured geometries")
-        print("[FaceScan] Best geometry has \(bestGeometry.vertices.count) vertices, \(bestGeometry.triangleCount) triangles")
+
+        // Warn if too few captures
+        if capturedFaceGeometries.count < 10 {
+            print("[FaceScan] Warning: Only \(capturedFaceGeometries.count) captures - scan may be incomplete")
+        }
+
+        // Find the best geometry:
+        // 1. Prefer frontal view (face looking at camera) for best quality
+        // 2. Fall back to geometry with most vertices
+        let bestGeometry: CapturedFaceGeometry
+
+        // Try to find a frontal capture (angle bucket near center)
+        // With angleBucketSize=36, center would be bucket 5 (180/36)
+        let centerBucket = 180 / configuration.angleBucketSize
+        let frontalCaptures = capturedFaceGeometries.filter { geometry in
+            guard let angle = geometry.angle else { return false }
+            return abs(angle - centerBucket) <= 1 // Within 1 bucket of center
+        }
+
+        if let frontalGeometry = frontalCaptures.max(by: { $0.vertices.count < $1.vertices.count }) {
+            bestGeometry = frontalGeometry
+            print("[FaceScan] Using frontal capture with \(bestGeometry.vertices.count) vertices")
+        } else {
+            // Fall back to geometry with most vertices
+            bestGeometry = capturedFaceGeometries.max(by: { $0.vertices.count < $1.vertices.count })!
+            print("[FaceScan] No frontal capture found, using max vertices: \(bestGeometry.vertices.count)")
+        }
+
+        print("[FaceScan] Best geometry: \(bestGeometry.vertices.count) vertices, \(bestGeometry.triangleCount) triangles")
 
         var allVertices: [SIMD3<Float>] = []
         var allNormals: [SIMD3<Float>] = []
@@ -457,18 +495,50 @@ final class LiDARScanningService: NSObject, ObservableObject {
             }
         }
 
-        // Get texture coordinates from captured geometry
-        let textureCoords: [SIMD2<Float>]? = bestGeometry.textureCoordinates
-
-        // Generate texture data from captured frames
+        // Generate texture coordinates by projecting vertices onto camera image
+        var textureCoords: [SIMD2<Float>]? = nil
         var textureData: MeshTextureData? = nil
+
         if !capturedTextureFrames.isEmpty {
-            let (atlasImage, atlasSize) = createTextureAtlas()
+            // Use the frame from the middle of the scan for best overall coverage
+            // This provides the best frontal view since face geometry and texture capture happen simultaneously
+            let bestFrameIndex = capturedTextureFrames.count / 2
+            let bestFrame = capturedTextureFrames[bestFrameIndex]
+
+            print("[FaceScan] Using texture frame \(bestFrameIndex + 1)/\(capturedTextureFrames.count)")
+            print("[FaceScan] Frame resolution: \(bestFrame.imageResolution)")
+
+            // Project face vertices onto camera image plane
+            // Use face-local vertices (not world-transformed) for projection
+            textureCoords = generateFaceTextureCoordinates(
+                vertices: bestGeometry.vertices,
+                faceTransform: bestGeometry.transform,
+                cameraTransform: bestFrame.transform,
+                intrinsics: bestFrame.intrinsics,
+                imageResolution: bestFrame.imageResolution
+            )
+
+            // Create texture atlas with the best frame
             textureData = MeshTextureData(
                 frames: capturedTextureFrames,
-                atlasImage: atlasImage,
-                atlasSize: atlasSize
+                atlasImage: bestFrame.image,
+                atlasSize: bestFrame.imageResolution
             )
+
+            print("[FaceScan] Generated \(textureCoords?.count ?? 0) texture coordinates")
+
+            // Log UV coordinate bounds for debugging
+            if let coords = textureCoords, !coords.isEmpty {
+                let minU = coords.map { $0.x }.min() ?? 0
+                let maxU = coords.map { $0.x }.max() ?? 0
+                let minV = coords.map { $0.y }.min() ?? 0
+                let maxV = coords.map { $0.y }.max() ?? 0
+                print("[FaceScan] UV bounds: U[\(minU)...\(maxU)], V[\(minV)...\(maxV)]")
+            }
+        } else {
+            // Fall back to ARFaceGeometry's built-in texture coordinates
+            textureCoords = bestGeometry.textureCoordinates
+            print("[FaceScan] Using built-in ARFaceGeometry texture coordinates (no frames captured)")
         }
 
         // Create captured mesh
@@ -639,6 +709,70 @@ final class LiDARScanningService: NSObject, ObservableObject {
         }
     }
 
+    /// Generate texture coordinates for face mesh by projecting vertices onto camera image
+    /// This handles the TrueDepth front camera's coordinate system and mirroring
+    private func generateFaceTextureCoordinates(
+        vertices: [SIMD3<Float>],
+        faceTransform: simd_float4x4,
+        cameraTransform: simd_float4x4,
+        intrinsics: simd_float3x3,
+        imageResolution: CGSize
+    ) -> [SIMD2<Float>] {
+        guard !vertices.isEmpty else { return [] }
+
+        // For front-facing TrueDepth camera:
+        // 1. Face vertices are in face-local space
+        // 2. faceTransform transforms from face-local to camera space
+        // 3. The camera image is horizontally mirrored (selfie mode)
+
+        let fx = intrinsics[0, 0]
+        let fy = intrinsics[1, 1]
+        let cx = intrinsics[2, 0]
+        let cy = intrinsics[2, 1]
+
+        let imageWidth = Float(imageResolution.width)
+        let imageHeight = Float(imageResolution.height)
+
+        return vertices.map { vertex in
+            // Transform vertex from face-local space to camera space
+            // For TrueDepth camera, faceTransform already gives us the position
+            // relative to the camera coordinate system
+            let localPos = SIMD4<Float>(vertex.x, vertex.y, vertex.z, 1.0)
+            let cameraPos = faceTransform * localPos
+
+            // In camera space, Z is depth (positive going away from camera)
+            // For front camera, the face is in front of the camera (positive Z)
+            guard cameraPos.z > 0.01 else {
+                return SIMD2<Float>(0.5, 0.5) // Default to center if behind camera
+            }
+
+            // Project to image plane using pinhole camera model
+            // Note: For ARKit front camera, X is positive to the left
+            let x = cameraPos.x / cameraPos.z
+            let y = cameraPos.y / cameraPos.z
+
+            // Apply camera intrinsics to get pixel coordinates
+            var pixelX = fx * x + cx
+            var pixelY = fy * y + cy
+
+            // The front camera image is mirrored horizontally (selfie mode)
+            // Mirror the X coordinate to match
+            pixelX = imageWidth - pixelX
+
+            // Convert to normalized UV coordinates [0, 1]
+            let u = pixelX / imageWidth
+            // Flip V coordinate: image Y=0 is at top, but texture V=0 should be at bottom
+            // for SceneKit rendering to display correctly
+            let v = 1.0 - (pixelY / imageHeight)
+
+            // Clamp to valid range
+            return SIMD2<Float>(
+                max(0, min(1, u)),
+                max(0, min(1, v))
+            )
+        }
+    }
+
     // MARK: - Texture Atlas Generation
 
     private func createTextureAtlas() -> (CGImage?, CGSize) {
@@ -700,6 +834,10 @@ extension LiDARScanningService: ARSessionDelegate {
 
             // When face is temporarily lost during scanning, continue to update progress
             // based on captured face geometries
+            if !faceFoundInFrame {
+                self.faceDetected = false
+            }
+
             if isScanning && !faceFoundInFrame {
                 updateScanProgress()
             }
