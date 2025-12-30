@@ -11,6 +11,20 @@ struct ExportOptionsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // 3D Print Readiness Section (shown first if analyzing)
+                if viewModel.isAnalyzing {
+                    Section {
+                        HStack {
+                            ProgressView()
+                                .padding(.trailing, 8)
+                            Text("Analyzing mesh for 3D printing...")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } else if let report = viewModel.printReport {
+                    printReadinessSection(report: report)
+                }
+
                 // Format Selection
                 Section("Export Format") {
                     Picker("Format", selection: $viewModel.selectedFormat) {
@@ -57,6 +71,21 @@ struct ExportOptionsView: View {
                     plyOptions
                 }
 
+                // 3D Print Preparation
+                Section {
+                    Toggle("Prepare for 3D Print", isOn: $viewModel.prepareForPrint)
+                    if viewModel.prepareForPrint {
+                        Toggle("Fill Holes", isOn: $viewModel.fillHolesForPrint)
+                        Toggle("Fix Non-Manifold", isOn: $viewModel.fixNonManifold)
+                    }
+                } header: {
+                    Text("3D Print Preparation")
+                } footer: {
+                    Text(viewModel.prepareForPrint ?
+                         "Mesh will be repaired for 3D printing (may take longer)." :
+                         "Enable to automatically fix common 3D printing issues.")
+                }
+
                 // Mesh Processing
                 Section {
                     Toggle("Center Mesh", isOn: $viewModel.centerMesh)
@@ -93,6 +122,107 @@ struct ExportOptionsView: View {
                     .fontWeight(.semibold)
                 }
             }
+            .task {
+                await viewModel.analyzeMesh(mesh)
+            }
+        }
+    }
+
+    // MARK: - Print Readiness Section
+    @ViewBuilder
+    private func printReadinessSection(report: PrintReadinessService.PrintReadinessReport) -> some View {
+        Section {
+            // Overall Score
+            HStack {
+                Text("Print Readiness")
+                Spacer()
+                PrintScoreBadge(score: report.overallScore)
+            }
+
+            // Status indicators
+            HStack {
+                StatusIndicator(label: "Watertight", isOK: report.isWatertight)
+                Spacer()
+                StatusIndicator(label: "Manifold", isOK: report.isManifold)
+            }
+
+            // Issues summary
+            if report.holeCount > 0 {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("\(report.holeCount) holes (\(report.holeTotalVertices) vertices)")
+                        .font(.subheadline)
+                    Spacer()
+                }
+            }
+
+            if report.nonManifoldEdgeCount > 0 {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("\(report.nonManifoldEdgeCount) non-manifold edges")
+                        .font(.subheadline)
+                    Spacer()
+                }
+            }
+
+            // Volume (if watertight)
+            if let volume = report.volume {
+                let volumeCm3 = volume * 1_000_000  // m³ to cm³
+                LabeledContent("Volume", value: String(format: "%.1f cm³", volumeCm3))
+            }
+
+            // Surface area
+            let areaCm2 = report.surfaceArea * 10_000  // m² to cm²
+            LabeledContent("Surface Area", value: String(format: "%.1f cm²", areaCm2))
+
+        } header: {
+            HStack {
+                Text("3D Print Analysis")
+                Spacer()
+                if report.isPrintable {
+                    Label("Ready", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                } else {
+                    Label("Issues Found", systemImage: "exclamationmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+        } footer: {
+            Text(report.scoreDescription)
+        }
+
+        // Recommendations
+        if !report.recommendations.isEmpty {
+            Section("Recommendations") {
+                ForEach(Array(report.recommendations.prefix(5).enumerated()), id: \.offset) { _, recommendation in
+                    HStack {
+                        Image(systemName: iconForSeverity(recommendation.severity))
+                            .foregroundColor(colorForSeverity(recommendation.severity))
+                        Text(recommendation.description)
+                            .font(.subheadline)
+                    }
+                }
+            }
+        }
+    }
+
+    private func iconForSeverity(_ severity: PrintReadinessService.PrintRecommendation.Severity) -> String {
+        switch severity {
+        case .critical: return "xmark.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .suggestion: return "lightbulb.fill"
+        }
+    }
+
+    private func colorForSeverity(_ severity: PrintReadinessService.PrintRecommendation.Severity) -> Color {
+        switch severity {
+        case .critical: return .red
+        case .warning: return .orange
+        case .suggestion: return .blue
         }
     }
 
@@ -204,6 +334,55 @@ struct ExportConfiguration {
     let includeTextureCoords: Bool
     let textureResolution: TextureResolution
     let createZipArchive: Bool
+
+    // 3D Print preparation options
+    let prepareForPrint: Bool
+    let fillHolesForPrint: Bool
+    let fixNonManifold: Bool
+}
+
+// MARK: - Print Score Badge
+struct PrintScoreBadge: View {
+    let score: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("\(score)")
+                .font(.headline)
+                .fontWeight(.bold)
+            Text("/100")
+                .font(.caption)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(scoreColor.opacity(0.2))
+        .foregroundColor(scoreColor)
+        .cornerRadius(8)
+    }
+
+    private var scoreColor: Color {
+        switch score {
+        case 90...100: return .green
+        case 70..<90: return .blue
+        case 50..<70: return .orange
+        default: return .red
+        }
+    }
+}
+
+// MARK: - Status Indicator
+struct StatusIndicator: View {
+    let label: String
+    let isOK: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: isOK ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundColor(isOK ? .green : .red)
+            Text(label)
+                .font(.subheadline)
+        }
+    }
 }
 
 // MARK: - View Model
@@ -219,8 +398,31 @@ class ExportOptionsViewModel: ObservableObject {
     @Published var textureResolution: TextureResolution = .medium
     @Published var createZipArchive = true
 
+    // 3D Print preparation
+    @Published var prepareForPrint = false
+    @Published var fillHolesForPrint = true
+    @Published var fixNonManifold = true
+
+    // Print analysis
+    @Published var isAnalyzing = false
+    @Published var printReport: PrintReadinessService.PrintReadinessReport?
+
+    private let printReadinessService = PrintReadinessService()
+
     var scaleFactor: Float {
         selectedUnit.scaleFromMeters
+    }
+
+    func analyzeMesh(_ mesh: CapturedMesh) async {
+        isAnalyzing = true
+        let report = await printReadinessService.analyze(mesh: mesh)
+        isAnalyzing = false
+        printReport = report
+
+        // Auto-enable print preparation if mesh has issues
+        if !report.isPrintable {
+            prepareForPrint = true
+        }
     }
 
     func estimatedFileSize(for mesh: CapturedMesh) -> String {
@@ -285,7 +487,10 @@ class ExportOptionsViewModel: ObservableObject {
             includeTexture: includeTexture,
             includeTextureCoords: includeTextureCoords,
             textureResolution: textureResolution,
-            createZipArchive: createZipArchive
+            createZipArchive: createZipArchive,
+            prepareForPrint: prepareForPrint,
+            fillHolesForPrint: fillHolesForPrint,
+            fixNonManifold: fixNonManifold
         )
     }
 }

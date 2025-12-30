@@ -72,6 +72,28 @@ actor MeshProcessingService {
         var fillHoles: Bool = true
         var removeNoise: Bool = true
         var noiseThreshold: Float = 0.002  // 2mm
+
+        // 3D Print preparation options
+        var prepareForPrint: Bool = false
+        var maxHoleSize: Int = 500  // Maximum hole size (in vertices) to fill
+        var fixNonManifold: Bool = true
+        var removeDuplicateVertices: Bool = true
+        var ensureOutwardNormals: Bool = true
+
+        /// Preset for 3D printing preparation
+        static var printReady: ProcessingOptions {
+            var options = ProcessingOptions()
+            options.prepareForPrint = true
+            options.smoothingIterations = 2
+            options.smoothingFactor = 0.3
+            options.decimationRatio = 0.7
+            options.fillHoles = true
+            options.maxHoleSize = 500
+            options.fixNonManifold = true
+            options.removeDuplicateVertices = true
+            options.ensureOutwardNormals = true
+            return options
+        }
     }
 
     // MARK: - Processed Mesh Result
@@ -198,14 +220,15 @@ actor MeshProcessingService {
             }
         }
 
-        // Step 2: Fill holes
+        // Step 2: Fill holes (with advanced algorithm for 3D printing)
         if options.fillHoles {
             progress?(.fillingHoles, ProcessingStep.fillingHoles.progress)
 
             (vertices, normals, faces) = fillHoles(
                 vertices: vertices,
                 normals: normals,
-                faces: faces
+                faces: faces,
+                maxHoleSize: options.maxHoleSize
             )
         }
 
@@ -332,68 +355,286 @@ actor MeshProcessingService {
         return (newVertices, newNormals, newFaces, vertexMap)
     }
 
-    // MARK: - Hole Filling
+    // MARK: - Advanced Hole Filling
 
     private func fillHoles(
         vertices: [SIMD3<Float>],
         normals: [SIMD3<Float>],
-        faces: [[Int]]
+        faces: [[Int]],
+        maxHoleSize: Int = 500
     ) -> ([SIMD3<Float>], [SIMD3<Float>], [[Int]]) {
         // Find boundary edges (edges that belong to only one face)
         var edgeCount: [String: Int] = [:]
-        var edgeToFace: [String: [Int]] = [:]
+        var adjacency: [Int: Set<Int>] = [:]
 
-        for (faceIdx, face) in faces.enumerated() {
+        for face in faces {
             for i in 0..<3 {
                 let v1 = face[i]
                 let v2 = face[(i + 1) % 3]
                 let key = v1 < v2 ? "\(v1)-\(v2)" : "\(v2)-\(v1)"
                 edgeCount[key, default: 0] += 1
-                edgeToFace[key, default: []].append(faceIdx)
+
+                adjacency[v1, default: []].insert(v2)
+                adjacency[v2, default: []].insert(v1)
             }
         }
 
         // Find boundary edges
-        let boundaryEdges = edgeCount.filter { $0.value == 1 }.keys
+        let boundaryEdgeKeys = edgeCount.filter { $0.value == 1 }.keys
 
-        if boundaryEdges.isEmpty {
+        if boundaryEdgeKeys.isEmpty {
             return (vertices, normals, faces)
         }
 
-        // Simple hole filling: add triangles to close small holes
+        // Build boundary adjacency (only boundary edges)
+        var boundaryAdjacency: [Int: Set<Int>] = [:]
+        for key in boundaryEdgeKeys {
+            let parts = key.split(separator: "-")
+            guard let v1 = Int(parts[0]), let v2 = Int(parts[1]) else { continue }
+            boundaryAdjacency[v1, default: []].insert(v2)
+            boundaryAdjacency[v2, default: []].insert(v1)
+        }
+
+        // Find all boundary loops (holes)
+        var visitedVertices: Set<Int> = []
+        var boundaryLoops: [[Int]] = []
+
+        for startVertex in boundaryAdjacency.keys {
+            guard !visitedVertices.contains(startVertex) else { continue }
+
+            var loop: [Int] = []
+            var current = startVertex
+            var previous: Int? = nil
+
+            // Trace the boundary loop
+            while true {
+                loop.append(current)
+                visitedVertices.insert(current)
+
+                guard let neighbors = boundaryAdjacency[current] else { break }
+                let nextOptions = neighbors.filter { $0 != previous }
+
+                guard let next = nextOptions.first else { break }
+
+                if next == startVertex && loop.count >= 3 {
+                    // Loop completed
+                    break
+                }
+
+                previous = current
+                current = next
+
+                // Safety check
+                if loop.count > maxHoleSize * 2 {
+                    break
+                }
+            }
+
+            if loop.count >= 3 {
+                boundaryLoops.append(loop)
+            }
+        }
+
+        print("[MeshProcessing] Found \(boundaryLoops.count) holes to fill")
+
+        var newVertices = vertices
+        var newNormals = normals
         var newFaces = faces
 
-        // Build boundary loops
-        var boundaryVertices: Set<Int> = []
-        for edge in boundaryEdges {
-            let parts = edge.split(separator: "-")
-            if let v1 = Int(parts[0]), let v2 = Int(parts[1]) {
-                boundaryVertices.insert(v1)
-                boundaryVertices.insert(v2)
+        // Fill each hole
+        for (holeIndex, loop) in boundaryLoops.enumerated() {
+            guard loop.count <= maxHoleSize else {
+                print("[MeshProcessing] Skipping hole \(holeIndex + 1) - too large (\(loop.count) vertices)")
+                continue
             }
+
+            let (filledFaces, addedVertices, addedNormals) = fillSingleHole(
+                loop: loop,
+                vertices: newVertices,
+                normals: newNormals
+            )
+
+            // Add new vertices
+            let vertexOffset = newVertices.count
+            newVertices.append(contentsOf: addedVertices)
+            newNormals.append(contentsOf: addedNormals)
+
+            // Add new faces with offset
+            for face in filledFaces {
+                let offsetFace = face.map { idx in
+                    idx >= vertices.count ? idx - vertices.count + vertexOffset : idx
+                }
+                newFaces.append(offsetFace)
+            }
+
+            print("[MeshProcessing] Filled hole \(holeIndex + 1) with \(filledFaces.count) triangles")
         }
 
-        // For small holes (< 10 vertices), create a fan triangulation
-        if boundaryVertices.count < 10 && boundaryVertices.count >= 3 {
-            let boundaryArray = Array(boundaryVertices)
+        return (newVertices, newNormals, newFaces)
+    }
 
-            // Find centroid
+    /// Fill a single hole using advancing front triangulation
+    private func fillSingleHole(
+        loop: [Int],
+        vertices: [SIMD3<Float>],
+        normals: [SIMD3<Float>]
+    ) -> (faces: [[Int]], addedVertices: [SIMD3<Float>], addedNormals: [SIMD3<Float>]) {
+        guard loop.count >= 3 else { return ([], [], []) }
+
+        var filledFaces: [[Int]] = []
+        var addedVertices: [SIMD3<Float>] = []
+        var addedNormals: [SIMD3<Float>] = []
+
+        // For small holes, use simple fan triangulation from centroid
+        if loop.count <= 20 {
+            // Calculate centroid
             var centroid = SIMD3<Float>(0, 0, 0)
-            for v in boundaryArray {
-                centroid += vertices[v]
-            }
-            centroid /= Float(boundaryArray.count)
+            var avgNormal = SIMD3<Float>(0, 0, 0)
 
-            // Create fan triangles (simplified approach)
-            for i in 0..<boundaryArray.count {
-                let v1 = boundaryArray[i]
-                let v2 = boundaryArray[(i + 1) % boundaryArray.count]
-                let v3 = boundaryArray[(i + 2) % boundaryArray.count]
-                newFaces.append([v1, v2, v3])
+            for vertexIndex in loop {
+                centroid += vertices[vertexIndex]
+                if vertexIndex < normals.count {
+                    avgNormal += normals[vertexIndex]
+                }
+            }
+            centroid /= Float(loop.count)
+            avgNormal = normalize(avgNormal)
+
+            // Add centroid as new vertex
+            let centroidIndex = vertices.count + addedVertices.count
+            addedVertices.append(centroid)
+            addedNormals.append(avgNormal)
+
+            // Create fan triangles
+            for i in 0..<loop.count {
+                let v1 = loop[i]
+                let v2 = loop[(i + 1) % loop.count]
+                filledFaces.append([v1, v2, centroidIndex])
+            }
+        } else {
+            // For larger holes, use ear clipping algorithm
+            filledFaces = earClipTriangulation(loop: loop, vertices: vertices)
+        }
+
+        return (filledFaces, addedVertices, addedNormals)
+    }
+
+    /// Ear clipping triangulation for larger holes
+    private func earClipTriangulation(loop: [Int], vertices: [SIMD3<Float>]) -> [[Int]] {
+        guard loop.count >= 3 else { return [] }
+
+        var remainingIndices = loop
+        var triangles: [[Int]] = []
+
+        // Calculate average normal of the hole boundary
+        let holeNormal = calculateHoleNormal(loop: loop, vertices: vertices)
+
+        while remainingIndices.count > 3 {
+            var earFound = false
+
+            for i in 0..<remainingIndices.count {
+                let prevIdx = (i - 1 + remainingIndices.count) % remainingIndices.count
+                let nextIdx = (i + 1) % remainingIndices.count
+
+                let vPrev = remainingIndices[prevIdx]
+                let vCurr = remainingIndices[i]
+                let vNext = remainingIndices[nextIdx]
+
+                // Check if this is a valid ear (convex vertex, no other vertices inside)
+                if isEar(prev: vPrev, curr: vCurr, next: vNext,
+                        remainingIndices: remainingIndices,
+                        vertices: vertices,
+                        holeNormal: holeNormal) {
+                    // Add triangle
+                    triangles.append([vPrev, vCurr, vNext])
+                    remainingIndices.remove(at: i)
+                    earFound = true
+                    break
+                }
+            }
+
+            // If no ear found, force add a triangle to avoid infinite loop
+            if !earFound && remainingIndices.count >= 3 {
+                triangles.append([remainingIndices[0], remainingIndices[1], remainingIndices[2]])
+                remainingIndices.remove(at: 1)
             }
         }
 
-        return (vertices, normals, newFaces)
+        // Add final triangle
+        if remainingIndices.count == 3 {
+            triangles.append([remainingIndices[0], remainingIndices[1], remainingIndices[2]])
+        }
+
+        return triangles
+    }
+
+    private func calculateHoleNormal(loop: [Int], vertices: [SIMD3<Float>]) -> SIMD3<Float> {
+        var normal = SIMD3<Float>(0, 0, 0)
+
+        for i in 0..<loop.count {
+            let v0 = vertices[loop[i]]
+            let v1 = vertices[loop[(i + 1) % loop.count]]
+            let v2 = vertices[loop[(i + 2) % loop.count]]
+
+            let edge1 = v1 - v0
+            let edge2 = v2 - v1
+            normal += cross(edge1, edge2)
+        }
+
+        return normalize(normal)
+    }
+
+    private func isEar(prev: Int, curr: Int, next: Int,
+                      remainingIndices: [Int],
+                      vertices: [SIMD3<Float>],
+                      holeNormal: SIMD3<Float>) -> Bool {
+        let vPrev = vertices[prev]
+        let vCurr = vertices[curr]
+        let vNext = vertices[next]
+
+        // Check if vertex is convex (forms correct winding)
+        let edge1 = vCurr - vPrev
+        let edge2 = vNext - vCurr
+        let crossProduct = cross(edge1, edge2)
+
+        if dot(crossProduct, holeNormal) < 0 {
+            return false  // Reflex vertex, not an ear
+        }
+
+        // Check if any other vertex is inside the triangle
+        for idx in remainingIndices {
+            if idx == prev || idx == curr || idx == next { continue }
+
+            if pointInTriangle(point: vertices[idx], v0: vPrev, v1: vCurr, v2: vNext) {
+                return false  // Another vertex inside, not a valid ear
+            }
+        }
+
+        return true
+    }
+
+    private func pointInTriangle(point: SIMD3<Float>, v0: SIMD3<Float>, v1: SIMD3<Float>, v2: SIMD3<Float>) -> Bool {
+        // Project to 2D (use XY plane, ignoring Z for simplicity)
+        let p = SIMD2<Float>(point.x, point.y)
+        let a = SIMD2<Float>(v0.x, v0.y)
+        let b = SIMD2<Float>(v1.x, v1.y)
+        let c = SIMD2<Float>(v2.x, v2.y)
+
+        let v0v1 = b - a
+        let v0v2 = c - a
+        let v0p = p - a
+
+        let dot00 = dot(v0v2, v0v2)
+        let dot01 = dot(v0v2, v0v1)
+        let dot02 = dot(v0v2, v0p)
+        let dot11 = dot(v0v1, v0v1)
+        let dot12 = dot(v0v1, v0p)
+
+        let invDenom = 1 / (dot00 * dot11 - dot01 * dot01)
+        let u = (dot11 * dot02 - dot01 * dot12) * invDenom
+        let v = (dot00 * dot12 - dot01 * dot02) * invDenom
+
+        return u >= 0 && v >= 0 && u + v < 1
     }
 
     // MARK: - Laplacian Smoothing

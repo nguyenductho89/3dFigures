@@ -17,6 +17,7 @@
 		456BE013251B84A14C3389D5 /* FigureScanner3DApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5487B0820A3416AB94BE93CD /* FigureScanner3DApp.swift */; };
 		485991F231934D26039C743F /* MeshPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBFEEB84555ABAE0BB798102 /* MeshPreviewView.swift */; };
 		5A9B39E7FC95FB17973C4A54 /* MeshProcessingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85D1739D23BE279B02A83130 /* MeshProcessingService.swift */; };
+		2416BF187A624D5DA4C540A6 /* PrintReadinessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6BD2FDD8B10464BAF30827E /* PrintReadinessService.swift */; };
 		5EAAB233178783708442249D /* Scan3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42FB3BA83A694107245091D /* Scan3DModel.swift */; };
 		846B9C61F4A0828E0030CD01 /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330D226D08A6E872B32A0C5C /* GalleryView.swift */; };
 		8D7E07088FDD454BC7EBA3FE /* ARPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33654A582FF17407BDCE74DB /* ARPreviewView.swift */; };
@@ -59,6 +60,7 @@
 		68BEDA87A36683A1C8A65677 /* MeshExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshExportService.swift; sourceTree = "<group>"; };
 		72627BC5F41642600F0879AB /* FigureScanner3DUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FigureScanner3DUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		85D1739D23BE279B02A83130 /* MeshProcessingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshProcessingService.swift; sourceTree = "<group>"; };
+		D6BD2FDD8B10464BAF30827E /* PrintReadinessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintReadinessService.swift; sourceTree = "<group>"; };
 		8B76EC1FD5BF5D7C39956BE7 /* BodyScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyScanView.swift; sourceTree = "<group>"; };
 		8C211CB2E6AF53310FEED780 /* LiDARScanningService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiDARScanningService.swift; sourceTree = "<group>"; };
 		91D3A8E88373FCF772807068 /* FigureScanner3D.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FigureScanner3D.entitlements; sourceTree = "<group>"; };
@@ -215,6 +217,7 @@
 			children = (
 				8C211CB2E6AF53310FEED780 /* LiDARScanningService.swift */,
 				68BEDA87A36683A1C8A65677 /* MeshExportService.swift */,
+				D6BD2FDD8B10464BAF30827E /* PrintReadinessService.swift */,
 				85D1739D23BE279B02A83130 /* MeshProcessingService.swift */,
 				5BBF3965AEDA92C4374B57E8 /* ScanStorageService.swift */,
 			);
@@ -393,6 +396,7 @@
 				C308FD13EBEE68ECB3AE94FA /* LiDARScanningService.swift in Sources */,
 				374A3B64FAD652C981D2A836 /* MeshExportService.swift in Sources */,
 				485991F231934D26039C743F /* MeshPreviewView.swift in Sources */,
+				2416BF187A624D5DA4C540A6 /* PrintReadinessService.swift in Sources */,
 				5A9B39E7FC95FB17973C4A54 /* MeshProcessingService.swift in Sources */,
 				0B3F5C57AB91BD1815F5FC41 /* OnboardingView.swift in Sources */,
 				5EAAB233178783708442249D /* Scan3DModel.swift in Sources */,

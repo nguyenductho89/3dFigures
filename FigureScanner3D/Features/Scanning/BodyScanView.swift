@@ -229,14 +229,41 @@ struct BodyScanView: View {
     // MARK: - Bottom Controls
     private var bottomControls: some View {
         VStack(spacing: 16) {
-            // Scan mode selector
+            // Quality and Scan mode selectors
             if viewModel.scanState == .ready {
-                Picker("Scan Mode", selection: $viewModel.scanMode) {
-                    Text("Auto 360°").tag(BodyScanViewModel.ScanMode.auto)
-                    Text("Manual").tag(BodyScanViewModel.ScanMode.manual)
+                VStack(spacing: 12) {
+                    // Quality mode selector
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text("Quality")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                            Spacer()
+                        }
+                        Picker("Quality", selection: $viewModel.qualityMode) {
+                            ForEach(BodyScanViewModel.QualityMode.allCases, id: \.self) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        HStack {
+                            Text(viewModel.qualityMode.description)
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.5))
+                            Spacer()
+                        }
+                    }
+                    .padding(.horizontal, 40)
+
+                    // Scan mode selector
+                    Picker("Scan Mode", selection: $viewModel.scanMode) {
+                        Text("Auto 360°").tag(BodyScanViewModel.ScanMode.auto)
+                        Text("Manual").tag(BodyScanViewModel.ScanMode.manual)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 40)
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 40)
             }
 
             // Progress bar
@@ -329,9 +356,64 @@ class BodyScanViewModel: ObservableObject {
         case auto, manual
     }
 
+    enum QualityMode: String, CaseIterable {
+        case standard = "Standard"
+        case highDetail = "High Detail"
+
+        var description: String {
+            switch self {
+            case .standard: return "Faster scan, smaller file"
+            case .highDetail: return "Full clothing details, larger file"
+            }
+        }
+
+        var processingOptions: MeshProcessingService.ProcessingOptions {
+            switch self {
+            case .standard:
+                return MeshProcessingService.ProcessingOptions(
+                    smoothingIterations: 3,
+                    smoothingFactor: 0.5,
+                    decimationRatio: 0.5,
+                    fillHoles: true,
+                    removeNoise: true,
+                    noiseThreshold: 0.002
+                )
+            case .highDetail:
+                // Preserve all mesh details for clothing patterns, buttons, folds
+                return MeshProcessingService.ProcessingOptions(
+                    smoothingIterations: 1,        // Minimal smoothing
+                    smoothingFactor: 0.3,          // Gentle smoothing
+                    decimationRatio: 0.85,         // Keep 85% of vertices
+                    fillHoles: true,
+                    removeNoise: true,
+                    noiseThreshold: 0.001          // More aggressive noise removal
+                )
+            }
+        }
+
+        var scanConfiguration: ScanConfiguration {
+            switch self {
+            case .standard:
+                return .default
+            case .highDetail:
+                // Higher capture rate for better texture coverage
+                return ScanConfiguration(
+                    requiredAngles: 12,            // More angles for complete coverage
+                    textureCaptureInterval: 0.1,   // Faster capture (10 fps)
+                    maxTextureFrames: 60,          // More frames for 360° coverage
+                    faceScanBounds: ScanConfiguration.default.faceScanBounds,
+                    lightingThresholds: ScanConfiguration.LightingThresholds.default,
+                    meshDensityTarget: 20,         // Higher mesh density
+                    angleBucketSize: 30            // Finer angle tracking
+                )
+            }
+        }
+    }
+
     // MARK: - Published Properties
     @Published var scanState: ScanState = .ready
     @Published var scanMode: ScanMode = .auto
+    @Published var qualityMode: QualityMode = .highDetail  // Default to high detail for clothing
     @Published var scanProgress: Float = 0.0
     @Published var bodyDetected = false
     @Published var distanceToBody: Float = 2.0
@@ -391,7 +473,9 @@ class BodyScanViewModel: ObservableObject {
         Int(scanProgress * Float(requiredAngles))
     }
 
-    let requiredAngles = 10  // More angles needed for body scan
+    var requiredAngles: Int {
+        qualityMode.scanConfiguration.requiredAngles
+    }
 
     var capturedMesh: CapturedMesh? {
         scanningService.capturedMesh
@@ -468,6 +552,9 @@ class BodyScanViewModel: ObservableObject {
     func startScan() {
         guard canStartScan else { return }
 
+        // Apply scan configuration based on quality mode
+        scanningService.updateConfiguration(qualityMode.scanConfiguration)
+
         scanState = .scanning
         scanningService.startScanning()
     }
@@ -476,14 +563,14 @@ class BodyScanViewModel: ObservableObject {
         scanState = .processing
         scanningService.stopScanning()
 
-        // Process the mesh
+        // Process the mesh with quality-based options
         Task {
             do {
                 if let mesh = scanningService.capturedMesh {
-                    let options = MeshProcessingService.ProcessingOptions(
-                        smoothingIterations: 5,
-                        decimationRatio: 0.3  // More aggressive decimation for large body meshes
-                    )
+                    // Use processing options based on quality mode
+                    let options = qualityMode.processingOptions
+                    print("[BodyScan] Processing with \(qualityMode.rawValue) mode")
+                    print("[BodyScan] Decimation: \(Int(options.decimationRatio * 100))%, Smoothing: \(options.smoothingIterations) iterations")
                     let _ = try await processingService.process(mesh, options: options)
                 }
                 scanState = .completed

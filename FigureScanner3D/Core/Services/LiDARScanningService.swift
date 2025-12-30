@@ -375,22 +375,25 @@ final class LiDARScanningService: NSObject, ObservableObject {
         var textureData: MeshTextureData? = nil
 
         if !capturedTextureFrames.isEmpty {
-            // Use the best frame for texture projection
-            let (atlasImage, atlasSize) = createTextureAtlas()
-            let bestFrame = capturedTextureFrames[capturedTextureFrames.count / 2]
+            print("[BodyScan] Generating multi-view texture coordinates from \(capturedTextureFrames.count) frames")
 
-            textureCoords = generateTextureCoordinates(
+            // For body scanning, use multi-view texture projection
+            // Each vertex is projected from the camera that best faces its normal
+            textureCoords = generateMultiViewTextureCoordinates(
                 vertices: allVertices,
-                cameraTransform: bestFrame.transform,
-                intrinsics: bestFrame.intrinsics,
-                imageResolution: bestFrame.imageResolution
+                normals: allNormals,
+                frames: capturedTextureFrames
             )
 
+            // Create texture atlas from captured frames
+            let (atlasImage, atlasSize) = createTextureAtlas()
             textureData = MeshTextureData(
                 frames: capturedTextureFrames,
                 atlasImage: atlasImage,
                 atlasSize: atlasSize
             )
+
+            print("[BodyScan] Generated \(textureCoords?.count ?? 0) texture coordinates")
         }
 
         // Create captured mesh
@@ -668,6 +671,104 @@ final class LiDARScanningService: NSObject, ObservableObject {
     }
 
     // MARK: - Texture Coordinate Generation
+
+    /// Generate texture coordinates using multi-view projection for body scanning
+    /// Each vertex is projected from the camera that best faces its surface normal
+    private func generateMultiViewTextureCoordinates(
+        vertices: [SIMD3<Float>],
+        normals: [SIMD3<Float>],
+        frames: [CapturedTextureFrame]
+    ) -> [SIMD2<Float>] {
+        guard !vertices.isEmpty, !frames.isEmpty else { return [] }
+
+        // Pre-compute camera forward directions for each frame
+        let cameraDirections: [SIMD3<Float>] = frames.map { frame in
+            // Camera forward is -Z in camera space, transform to world space
+            let forward = SIMD3<Float>(
+                -frame.transform.columns.2.x,
+                -frame.transform.columns.2.y,
+                -frame.transform.columns.2.z
+            )
+            return normalize(forward)
+        }
+
+        // Pre-compute camera positions
+        let cameraPositions: [SIMD3<Float>] = frames.map { frame in
+            SIMD3<Float>(
+                frame.transform.columns.3.x,
+                frame.transform.columns.3.y,
+                frame.transform.columns.3.z
+            )
+        }
+
+        return vertices.enumerated().map { (index, vertex) in
+            let normal = index < normals.count ? normals[index] : SIMD3<Float>(0, 0, 1)
+
+            // Find the best frame for this vertex (camera most facing the vertex normal)
+            var bestFrameIndex = 0
+            var bestScore: Float = -Float.infinity
+
+            for (frameIndex, cameraDir) in cameraDirections.enumerated() {
+                // Direction from camera to vertex
+                let toVertex = normalize(vertex - cameraPositions[frameIndex])
+
+                // Score = how well the camera faces the surface
+                // High score when camera is looking at the front of the surface
+                let facingScore = dot(-toVertex, normal)
+
+                // Also consider if vertex is in front of camera
+                let inFrontScore = dot(toVertex, cameraDir)
+
+                // Combined score: prefer cameras that see the front of the surface
+                let score = facingScore * 0.7 + inFrontScore * 0.3
+
+                if score > bestScore {
+                    bestScore = score
+                    bestFrameIndex = frameIndex
+                }
+            }
+
+            // Project vertex using the best frame
+            let bestFrame = frames[bestFrameIndex]
+            return projectVertexToFrame(
+                vertex: vertex,
+                frame: bestFrame
+            )
+        }
+    }
+
+    /// Project a single vertex onto a camera frame
+    private func projectVertexToFrame(
+        vertex: SIMD3<Float>,
+        frame: CapturedTextureFrame
+    ) -> SIMD2<Float> {
+        let viewMatrix = frame.transform.inverse
+        let worldPos = SIMD4<Float>(vertex.x, vertex.y, vertex.z, 1.0)
+        let cameraPos = viewMatrix * worldPos
+
+        // Skip vertices behind camera
+        guard cameraPos.z < -0.01 else {
+            return SIMD2<Float>(0.5, 0.5)
+        }
+
+        // Project to image plane using intrinsics
+        let x = -cameraPos.x / cameraPos.z
+        let y = -cameraPos.y / cameraPos.z
+
+        let fx = frame.intrinsics[0, 0]
+        let fy = frame.intrinsics[1, 1]
+        let cx = frame.intrinsics[2, 0]
+        let cy = frame.intrinsics[2, 1]
+
+        let u = (fx * x + cx) / Float(frame.imageResolution.width)
+        let v = (fy * y + cy) / Float(frame.imageResolution.height)
+
+        // Clamp to valid range
+        return SIMD2<Float>(
+            max(0, min(1, u)),
+            max(0, min(1, 1 - v))  // Flip Y for texture coordinates
+        )
+    }
 
     private func generateTextureCoordinates(
         vertices: [SIMD3<Float>],
